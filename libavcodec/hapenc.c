@@ -24,7 +24,7 @@
  * @file
  * Hap encoder
  *
- * Fourcc: Hap1, Hap5, HapY
+ * Fourcc: Hap1, Hap5, HapY, HapA, HapM
  *
  * https://github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md
  */
@@ -56,16 +56,47 @@ enum HapHeaderLength {
 static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length, const AVFrame *f)
 {
     HapContext *ctx = avctx->priv_data;
+    int t;
 
-    if (ctx->tex_size > out_length)
-        return AVERROR_BUFFER_TOO_SMALL;
+    if (ctx->texture_count == 2) {
+        /* HapM: encode two textures (DXT5-YCoCg + RGTC1 alpha) */
+        size_t tex_size_ycocg = avctx->width / TEXTURE_BLOCK_W *
+                                avctx->height / TEXTURE_BLOCK_H * ctx->enc[0].tex_ratio;
+        size_t tex_size_alpha = avctx->width / TEXTURE_BLOCK_W *
+                                avctx->height / TEXTURE_BLOCK_H * ctx->enc[1].tex_ratio;
 
-    ctx->enc.tex_data.out = out;
-    ctx->enc.frame_data.in = f->data[0];
-    ctx->enc.stride = f->linesize[0];
-    ctx->enc.width  = avctx->width;
-    ctx->enc.height = avctx->height;
-    ff_texturedsp_exec_compress_threads(avctx, &ctx->enc);
+        if (tex_size_ycocg + tex_size_alpha > out_length)
+            return AVERROR_BUFFER_TOO_SMALL;
+
+        /* Encode DXT5-YCoCg texture (RGB data) */
+        ctx->enc[0].tex_data.out = out;
+        ctx->enc[0].frame_data.in = f->data[0];
+        ctx->enc[0].stride = f->linesize[0];
+        ctx->enc[0].width  = avctx->width;
+        ctx->enc[0].height = avctx->height;
+        ff_texturedsp_exec_compress_threads(avctx, &ctx->enc[0]);
+
+        /* Encode RGTC1 alpha texture */
+        ctx->enc[1].tex_data.out = out + tex_size_ycocg;
+        ctx->enc[1].frame_data.in = f->data[0];
+        ctx->enc[1].stride = f->linesize[0];
+        ctx->enc[1].width  = avctx->width;
+        ctx->enc[1].height = avctx->height;
+        ff_texturedsp_exec_compress_threads(avctx, &ctx->enc[1]);
+
+        ctx->tex_size_alpha = tex_size_alpha;
+    } else {
+        /* Single texture encoding */
+        if (ctx->tex_size > out_length)
+            return AVERROR_BUFFER_TOO_SMALL;
+
+        ctx->enc[0].tex_data.out = out;
+        ctx->enc[0].frame_data.in = f->data[0];
+        ctx->enc[0].stride = f->linesize[0];
+        ctx->enc[0].width  = avctx->width;
+        ctx->enc[0].height = avctx->height;
+        ff_texturedsp_exec_compress_threads(avctx, &ctx->enc[0]);
+    }
 
     return 0;
 }
@@ -150,7 +181,11 @@ static int hap_header_length(HapContext *ctx)
     /* Top section header (long version) */
     int length = HAP_HDR_LONG;
 
-    if (ctx->chunk_count > 1) {
+    if (ctx->texture_count == 2) {
+        /* HapM: multi-texture container adds extra header + two texture section headers */
+        length += HAP_HDR_SHORT;  /* Multi-texture container header */
+        length += HAP_HDR_LONG * 2;  /* Two texture section headers */
+    } else if (ctx->chunk_count > 1) {
         /* Decode Instructions header (short) + Decode Instructions Container */
         length += HAP_HDR_SHORT + hap_decode_instructions_length(ctx);
     }
@@ -164,7 +199,24 @@ static void hap_write_frame_header(HapContext *ctx, uint8_t *dst, int frame_leng
     int i;
 
     bytestream2_init_writer(&pbc, dst, frame_length);
-    if (ctx->chunk_count == 1) {
+
+    if (ctx->texture_count == 2) {
+        /* HapM: write multi-texture container header */
+        size_t tex_size_ycocg = ctx->tex_size - ctx->tex_size_alpha;
+        size_t tex_size_alpha = ctx->tex_size_alpha;
+
+        /* Top-level multi-texture container (0x0D) */
+        hap_write_section_header(&pbc, HAP_HDR_SHORT, frame_length - 12,
+                                 HAP_FMT_HAPM);
+
+        /* First texture section: DXT5-YCoCg */
+        hap_write_section_header(&pbc, HAP_HDR_LONG, tex_size_ycocg,
+                                 ctx->chunks[0].compressor | HAP_FMT_YCOCGDXT5);
+
+        /* Second texture section: RGTC1 alpha */
+        hap_write_section_header(&pbc, HAP_HDR_LONG, tex_size_alpha,
+                                 ctx->chunks[0].compressor | HAP_FMT_RGTC1);
+    } else if (ctx->chunk_count == 1) {
         /* Write a simple header */
         hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
                                  ctx->chunks[0].compressor | ctx->opt_tex_fmt);
@@ -252,36 +304,62 @@ static av_cold int hap_init(AVCodecContext *avctx)
 
     ff_texturedspenc_init(&dxtc);
 
+    ctx->texture_count = 1;  /* Default to single texture */
+
     switch (ctx->opt_tex_fmt) {
     case HAP_FMT_RGBDXT1:
-        ctx->enc.tex_ratio = 8;
+        ctx->enc[0].tex_ratio = 8;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '1');
         avctx->bits_per_coded_sample = 24;
-        ctx->enc.tex_funct = dxtc.dxt1_block;
+        ctx->enc[0].tex_funct = dxtc.dxt1_block;
         break;
     case HAP_FMT_RGBADXT5:
-        ctx->enc.tex_ratio = 16;
+        ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '5');
         avctx->bits_per_coded_sample = 32;
-        ctx->enc.tex_funct = dxtc.dxt5_block;
+        ctx->enc[0].tex_funct = dxtc.dxt5_block;
         break;
     case HAP_FMT_YCOCGDXT5:
-        ctx->enc.tex_ratio = 16;
+        ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', 'Y');
         avctx->bits_per_coded_sample = 24;
-        ctx->enc.tex_funct = dxtc.dxt5ys_block;
+        ctx->enc[0].tex_funct = dxtc.dxt5ys_block;
+        break;
+    case HAP_FMT_RGTC1:
+        ctx->enc[0].tex_ratio = 8;
+        avctx->codec_tag = MKTAG('H', 'a', 'p', 'A');
+        avctx->bits_per_coded_sample = 8;
+        ctx->enc[0].tex_funct = dxtc.rgtc1u_gray_block;
+        break;
+    case HAP_FMT_HAPM:
+        /* HapM uses two textures: DXT5-YCoCg (16 bytes) + RGTC1 alpha (8 bytes) */
+        ctx->texture_count = 2;
+        ctx->enc[0].tex_ratio = 16;
+        ctx->enc[1].tex_ratio = 8;
+        avctx->codec_tag = MKTAG('H', 'a', 'p', 'M');
+        avctx->bits_per_coded_sample = 32;
+        ctx->enc[0].tex_funct = dxtc.dxt5ys_block;
+        ctx->enc[1].tex_funct = dxtc.rgtc1u_alpha_block;
+        ctx->enc[1].raw_ratio = 16;
+        ctx->enc[1].slice_count = av_clip(avctx->thread_count, 1, avctx->height / TEXTURE_BLOCK_H);
         break;
     default:
         av_log(avctx, AV_LOG_ERROR, "Invalid format %02X\n", ctx->opt_tex_fmt);
         return AVERROR_INVALIDDATA;
     }
-    ctx->enc.raw_ratio = 16;
-    ctx->enc.slice_count = av_clip(avctx->thread_count, 1, avctx->height / TEXTURE_BLOCK_H);
+    ctx->enc[0].raw_ratio = 16;
+    ctx->enc[0].slice_count = av_clip(avctx->thread_count, 1, avctx->height / TEXTURE_BLOCK_H);
 
     /* Texture compression ratio is constant, so can we computer
      * beforehand the final size of the uncompressed buffer. */
     ctx->tex_size   = avctx->width  / TEXTURE_BLOCK_W *
-                      avctx->height / TEXTURE_BLOCK_H * ctx->enc.tex_ratio;
+                      avctx->height / TEXTURE_BLOCK_H * ctx->enc[0].tex_ratio;
+
+    /* For HapM, add the second texture size */
+    if (ctx->texture_count == 2) {
+        ctx->tex_size += avctx->width  / TEXTURE_BLOCK_W *
+                         avctx->height / TEXTURE_BLOCK_H * ctx->enc[1].tex_ratio;
+    }
 
     switch (ctx->opt_compressor) {
     case HAP_COMP_NONE:
@@ -294,7 +372,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
     case HAP_COMP_SNAPPY:
         /* Round the chunk count to divide evenly on DXT block edges */
         corrected_chunk_count = av_clip(ctx->opt_chunk_count, 1, HAP_MAX_CHUNKS);
-        while ((ctx->tex_size / ctx->enc.tex_ratio) % corrected_chunk_count != 0) {
+        while ((ctx->tex_size / ctx->enc[0].tex_ratio) % corrected_chunk_count != 0) {
             corrected_chunk_count--;
         }
 
@@ -331,10 +409,12 @@ static av_cold int hap_close(AVCodecContext *avctx)
 #define OFFSET(x) offsetof(HapContext, x)
 #define FLAGS     AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
-    { "format", NULL, OFFSET(opt_tex_fmt), AV_OPT_TYPE_INT, { .i64 = HAP_FMT_RGBDXT1 }, HAP_FMT_RGBDXT1, HAP_FMT_YCOCGDXT5, FLAGS, .unit = "format" },
+    { "format", NULL, OFFSET(opt_tex_fmt), AV_OPT_TYPE_INT, { .i64 = HAP_FMT_RGBDXT1 }, HAP_FMT_RGTC1, HAP_FMT_HAPM, FLAGS, .unit = "format" },
         { "hap",       "Hap 1 (DXT1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBDXT1   }, 0, 0, FLAGS, .unit = "format" },
         { "hap_alpha", "Hap Alpha (DXT5 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBADXT5  }, 0, 0, FLAGS, .unit = "format" },
         { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
+        { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
+        { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },
@@ -361,6 +441,6 @@ const FFCodec ff_hap_encoder = {
     .init           = hap_init,
     FF_CODEC_ENCODE_CB(hap_encode),
     .close          = hap_close,
-    CODEC_PIXFMTS(AV_PIX_FMT_RGBA),
+    CODEC_PIXFMTS(AV_PIX_FMT_RGBA, AV_PIX_FMT_GRAY8),
     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
 };

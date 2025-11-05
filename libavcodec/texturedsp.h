@@ -61,9 +61,11 @@ typedef struct TextureDSPContext {
 } TextureDSPContext;
 
 typedef struct TextureDSPEncContext {
-    int (*dxt1_block)        (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
-    int (*dxt5_block)        (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
-    int (*dxt5ys_block)      (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+    int (*dxt1_block)         (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+    int (*dxt5_block)         (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+    int (*dxt5ys_block)       (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+    int (*rgtc1u_gray_block)  (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+    int (*rgtc1u_alpha_block) (uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
 } TextureDSPEncContext;
 
 typedef struct TextureDSPThreadContext {

@@ -647,11 +647,53 @@ static int dxt5ys_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
     return 16;
 }
 
+/**
+ * Compress one block of grayscale pixels in an RGTC1 texture (BC4) and store the
+ * resulting bytes in 'dst'. This format uses the same compression as DXT5 alpha.
+ *
+ * @param dst    output buffer.
+ * @param stride scanline in bytes.
+ * @param block  block to compress.
+ * @return how much texture data has been written.
+ */
+static int rgtc1u_gray_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    int x, y;
+    uint8_t reorder[64];
+
+    /* Extract red channel as grayscale data */
+    for (y = 0; y < 4; y++)
+        for (x = 0; x < 4; x++)
+            reorder[3 + x * 4 + y * 16] = block[0 + x * 4 + y * stride];
+
+    compress_alpha(dst, 16, reorder);
+
+    return 8;
+}
+
+/**
+ * Compress one block of alpha channel pixels in an RGTC1 texture (BC4) and store the
+ * resulting bytes in 'dst'. This extracts and compresses the alpha channel.
+ *
+ * @param dst    output buffer.
+ * @param stride scanline in bytes.
+ * @param block  block to compress.
+ * @return how much texture data has been written.
+ */
+static int rgtc1u_alpha_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    compress_alpha(dst, stride, block);
+
+    return 8;
+}
+
 av_cold void ff_texturedspenc_init(TextureDSPEncContext *c)
 {
     c->dxt1_block         = dxt1_block;
     c->dxt5_block         = dxt5_block;
     c->dxt5ys_block       = dxt5ys_block;
+    c->rgtc1u_gray_block  = rgtc1u_gray_block;
+    c->rgtc1u_alpha_block = rgtc1u_alpha_block;
 }
 
 #define TEXTUREDSP_FUNC_NAME ff_texturedsp_exec_compress_threads

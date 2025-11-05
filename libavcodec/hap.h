@@ -34,6 +34,7 @@ enum HapTextureFormat {
     HAP_FMT_RGBADXT5  = 0x0E,
     HAP_FMT_YCOCGDXT5 = 0x0F,
     HAP_FMT_RGTC1     = 0x01,
+    HAP_FMT_HAPM      = 0x0D,  /* Multi-texture container format for HapM */
 };
 
 enum HapCompressor {
@@ -75,11 +76,14 @@ typedef struct HapContext {
 
     size_t max_snappy;       /* Maximum compressed size for snappy buffer */
 
-    int texture_count;      /* 2 for HAQA, 1 for other version */
+    int texture_count;      /* 2 for HAPQA/HapM, 1 for other version */
     int texture_section_size; /* size of the part of the texture section (for HAPQA) */
 
-    TextureDSPThreadContext enc;
-    TextureDSPThreadContext dec[2];
+    uint8_t *tex_buf_alpha;  /* Buffer for alpha texture in HapM encoding */
+    size_t tex_size_alpha;   /* Size of alpha texture in HapM encoding */
+
+    TextureDSPThreadContext enc[2];  /* Encoder contexts for multi-texture */
+    TextureDSPThreadContext dec[2];  /* Decoder contexts for multi-texture */
 } HapContext;
 
 /*
