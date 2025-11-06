@@ -1,0 +1,30 @@
+{
+  "profiles": {
+    "list": [
+      {
+        "name": "MSYS2 MINGW64",
+        "commandline": "C:/tools/msys64/msys2_shell.cmd -defterm -here -no-start -mingw64",
+        "icon": "C:/tools/msys64/mingw64.ico",
+        "startingDirectory": "%USERPROFILE%",
+        "colorScheme": "Campbell",
+        "guid": "{17da3cac-b318-431e-8a3e-7fcdefe6d114}"
+      },
+      {
+        "name": "MSYS2 UCRT64",
+        "commandline": "C:/tools/msys64/msys2_shell.cmd -defterm -here -no-start -ucrt64",
+        "icon": "C:/tools/msys64/ucrt64.ico",
+        "startingDirectory": "%USERPROFILE%",
+        "colorScheme": "Campbell",
+        "guid": "{71160544-14d8-4194-af25-d05feeac7233}"
+      },
+      {
+        "name": "MSYS2 MSYS",
+        "commandline": "C:/tools/msys64/msys2_shell.cmd -defterm -here -no-start -msys",
+        "icon": "C:/tools/msys64/msys2.ico",
+        "startingDirectory": "%USERPROFILE%",
+        "colorScheme": "Campbell",
+        "guid": "{2d51fdc4-a03b-4eed-8bf0-1f8b7d09f594}"
+      }
+    ]
+  }
+}
