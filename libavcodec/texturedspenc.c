@@ -571,22 +571,27 @@ static void compress_alpha(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
 }
 
 /**
- * Convert a RGBA buffer to unscaled YCoCg.
- * Scale is usually introduced to avoid banding over a certain range of colors,
- * but this version of the algorithm does not introduce it as much as other
- * implementations, allowing for a simpler and faster conversion.
+ * Convert a RGBA buffer to YCoCg using the standard transform.
+ * This follows the industry-standard YCoCg-DXT specification:
+ *   Y  = ( R + 2G + B) / 4
+ *   Co = ( R -  B) / 2
+ *   Cg = (-R + 2G - B) / 4
  */
 static void rgba2ycocg(uint8_t *dst, const uint8_t *pixel)
 {
-    int r =  pixel[0];
-    int g = (pixel[1] + 1) >> 1;
-    int b =  pixel[2];
-    int t = (2 + r + b) >> 2;
+    int r = pixel[0];
+    int g = pixel[1];
+    int b = pixel[2];
 
-    dst[0] = av_clip_uint8(128 + ((r - b + 1) >> 1));   /* Co */
-    dst[1] = av_clip_uint8(128 + g - t);                /* Cg */
+    /* Standard YCoCg transform */
+    int Co = ((r - b + 1) >> 1);                        /* Co = (R - B) / 2 */
+    int Cg = ((-r + (g << 1) - b + 2) >> 2);            /* Cg = (-R + 2G - B) / 4 */
+    int Y  = ((r + (g << 1) + b + 2) >> 2);             /* Y  = (R + 2G + B) / 4 */
+
+    dst[0] = av_clip_uint8(128 + Co);                   /* Co */
+    dst[1] = av_clip_uint8(128 + Cg);                   /* Cg */
     dst[2] = 0;
-    dst[3] = av_clip_uint8(g + t);                      /* Y */
+    dst[3] = av_clip_uint8(Y);                          /* Y */
 }
 
 /**
