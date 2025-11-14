@@ -11,7 +11,7 @@ You need to be in the **MSYS2 MINGW64** terminal (not regular cmd or PowerShell)
 First time setup or if you need to reinstall dependencies:
 
 ```bash
-./install-dependencies.sh
+./build-install-dependencies.sh
 ```
 
 This installs all required MSYS2 packages including:
@@ -22,7 +22,7 @@ This installs all required MSYS2 packages including:
 
 ### Step 2: Build FFmpeg Portable Build (Recommended for apps)
 ```bash
-./rebuild-static.sh
+./build-static.sh
 ```
 - Same executables (~30MB) + required DLLs (~5 files)
 - **Automatically bundles MINGW64 DLLs**
@@ -40,7 +40,7 @@ build include:
 Deploy executables and DLLs to your application folder:
 
 ```bash
-./copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg
+./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg
 ```
 
 This works for both build options:
