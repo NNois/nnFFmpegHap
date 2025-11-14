@@ -126,7 +126,13 @@ Check HAP codecs:
 - Run `make clean` and try again
 - Check you have enough disk space (>5GB recommended)
 
-
+### ToDo
+- [x] Hap1 ("Hap") ✅
+- [x] Hap5 ("Hap Alpha") ✅
+- [x] HapA Alpha Only Added ✅
+- [x] HapY ("Hap Q") Fix YCoCg transform in HapQ ✅
+- [ ] HapM ("Hap Q Alpha") work in progress
+- [ ] HapR will probably never possible in unreal engine
 
 FFmpeg README
 =============
