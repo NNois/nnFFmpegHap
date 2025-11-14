@@ -19,7 +19,6 @@ echo ""
 echo "Step 2: Configuring with HAP and all codecs (STATIC BUILD)..."
 echo ""
 
-# Same configuration as rebuild-with-hap.sh
 # Note: Full static linking is not possible with MINGW64
 # We'll build normally and bundle required DLLs
 ./configure \
