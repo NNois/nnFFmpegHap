@@ -35,6 +35,8 @@ echo ""
     --enable-libvorbis \
     --enable-libopus \
     --enable-libmp3lame \
+    --enable-libzimg \
+    --enable-libvfw32 \
     --extra-cflags="-O3"
 
 echo ""

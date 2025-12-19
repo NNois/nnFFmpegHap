@@ -34,7 +34,7 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-yasm \
     mingw-w64-x86_64-nasm \
     mingw-w64-x86_64-cmake \
-    mingw-w64-x86_64-pkg-config \
+    mingw-w64-x86_64-pkgconf \
     make \
     diffutils
 
@@ -54,9 +54,10 @@ echo "Step 4: Installing additional libraries..."
 pacman -S --needed --noconfirm \
     mingw-w64-x86_64-openexr \
     mingw-w64-x86_64-libwebp \
-    mingw-w64-x86_64-sdl2 \
+    mingw-w64-x86_64-SDL2 \
     mingw-w64-x86_64-zlib \
-    mingw-w64-x86_64-bzip2
+    mingw-w64-x86_64-bzip2 \
+    mingw-w64-x86_64-zimg
 
 echo ""
 echo "=========================================="
@@ -67,7 +68,7 @@ echo "Installed packages:"
 echo "  Build Tools:"
 echo "    - GCC compiler"
 echo "    - YASM & NASM assemblers"
-echo "    - CMake & pkg-config"
+echo "    - CMake & pkgconf"
 echo ""
 echo "  Codec Libraries:"
 echo "    - Snappy (for HAP encoder) ⭐"
@@ -83,7 +84,8 @@ echo "    - OpenEXR (EXR support)"
 echo "    - libwebp (WebP support)"
 echo "    - SDL2 (video playback for ffplay)"
 echo "    - zlib & bzip2 (compression)"
+echo "    - zimg (zscale filter for high-quality scaling)"
 echo ""
 echo "You can now build FFmpeg with:"
-echo "  ./rebuild-with-hap.sh"
+echo "  ./build-static.sh"
 echo ""
