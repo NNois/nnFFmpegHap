@@ -16,7 +16,14 @@ make clean 2>/dev/null || true
 rm -f config.h config.log ffbuild/config.mak 2>/dev/null || true
 
 echo ""
-echo "Step 2: Configuring with HAP and all codecs (STATIC BUILD)..."
+echo "Step 2: Configuring build options (STATIC BUILD):"
+echo "  - Core: --enable-gpl --enable-version3 --disable-debug"
+echo "  - Link: --enable-static --disable-shared"
+echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libzimg"
+echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame"
+echo "  - HAP: --enable-libsnappy"
+echo "  - Capture: --enable-indev=vfwcap"
+echo "  - CFLAGS: -O3"
 echo ""
 
 # Note: Full static linking is not possible with MINGW64
@@ -110,4 +117,10 @@ echo "without requiring MSYS2."
 echo ""
 echo "To deploy to your app, use:"
 echo "  ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
+echo ""
+echo "Run it now? (y/N)"
+read -r RUN_COPY
+if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
+    ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg
+fi
 echo ""

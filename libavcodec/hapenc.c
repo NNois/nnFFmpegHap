@@ -189,9 +189,10 @@ static int hap_header_length(HapContext *ctx)
     return length;
 }
 
-static int hap_texture_section_header_length(int chunk_count)
+static int hap_texture_section_header_length(int chunk_count,
+                                             enum HapHeaderLength header_length)
 {
-    int length = HAP_HDR_LONG;
+    int length = header_length;
 
     if (chunk_count > 1)
         length += HAP_HDR_SHORT + hap_decode_instructions_length(chunk_count);
@@ -201,7 +202,8 @@ static int hap_texture_section_header_length(int chunk_count)
 
 static void hap_write_texture_header(HapContext *ctx, uint8_t *dst,
                                      enum HapTextureFormat tex_fmt,
-                                     int chunk_count, int frame_length)
+                                     int chunk_count, int frame_length,
+                                     enum HapHeaderLength header_length)
 {
     PutByteContext pbc;
     int i;
@@ -210,11 +212,11 @@ static void hap_write_texture_header(HapContext *ctx, uint8_t *dst,
 
     if (chunk_count == 1) {
         /* Write a simple header */
-        hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
+        hap_write_section_header(&pbc, header_length, frame_length - header_length,
                                  ctx->chunks[0].compressor | tex_fmt);
     } else {
         /* Write a complex header with Decode Instructions Container */
-        hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
+        hap_write_section_header(&pbc, header_length, frame_length - header_length,
                                  HAP_COMP_COMPLEX | tex_fmt);
         hap_write_section_header(&pbc, HAP_HDR_SHORT, hap_decode_instructions_length(chunk_count),
                                  HAP_ST_DECODE_INSTRUCTIONS);
@@ -274,19 +276,19 @@ static int hap_encode(AVCodecContext *avctx, AVPacket *pkt,
 
         /* Write header at the start. */
         hap_write_texture_header(ctx, pkt->data, ctx->opt_tex_fmt, ctx->chunk_count,
-                                 final_data_size + header_length);
+                                 final_data_size + header_length, HAP_HDR_LONG);
 
         av_shrink_packet(pkt, final_data_size + header_length);
         *got_packet = 1;
         return 0;
     } else {
         int chunk_count = ctx->chunk_count;
-        int tex_header_len = hap_texture_section_header_length(chunk_count);
-        int top_header_len = HAP_HDR_LONG;
+        int tex_header_len = hap_texture_section_header_length(chunk_count, HAP_HDR_SHORT);
+        int top_header_len = HAP_HDR_SHORT;
         int max_payload[2];
         int compressed_size[2];
         int header_total = top_header_len + tex_header_len * ctx->texture_count;
-        int data_offset = header_total;
+        int offset = top_header_len;
         size_t tex_size_main = ctx->tex_size;
         size_t tex_size_alpha = ctx->tex_size_alpha;
         size_t max_snappy_main = ctx->max_snappy;
@@ -309,6 +311,8 @@ static int hap_encode(AVCodecContext *avctx, AVPacket *pkt,
 
         for (int t = 0; t < ctx->texture_count; t++) {
             TextureDSPThreadContext *enc = &ctx->enc[t];
+            int header_offset = offset;
+            int data_offset = header_offset + tex_header_len;
             uint8_t *texture_dst = pkt->data + data_offset;
             size_t tex_size = t == 0 ? tex_size_main : tex_size_alpha;
 
@@ -336,26 +340,36 @@ static int hap_encode(AVCodecContext *avctx, AVPacket *pkt,
                     return compressed_size[t];
             }
 
+            if ((size_t)compressed_size[t] > 0xFFFFFFU) {
+                av_log(avctx, AV_LOG_ERROR, "HapM texture section too large for short header.\n");
+                return AVERROR_INVALIDDATA;
+            }
+
             hap_write_texture_header(ctx,
-                                     pkt->data + top_header_len + tex_header_len * t,
+                                     pkt->data + header_offset,
                                      tex_formats[t],
                                      chunk_count,
-                                     compressed_size[t] + tex_header_len);
+                                     compressed_size[t] + tex_header_len,
+                                     HAP_HDR_SHORT);
 
-            data_offset += compressed_size[t];
+            offset = data_offset + compressed_size[t];
         }
 
         ctx->tex_size = tex_size_main;
         ctx->max_snappy = max_snappy_main;
         ctx->tex_buf = tex_buf_main;
 
-        bytestream2_init_writer(&pbc, pkt->data,
-                                header_total + compressed_size[0] + compressed_size[1]);
-        hap_write_section_header(&pbc, HAP_HDR_LONG,
-                                 header_total + compressed_size[0] + compressed_size[1] - top_header_len,
+        if ((size_t)offset - top_header_len > 0xFFFFFFU) {
+            av_log(avctx, AV_LOG_ERROR, "HapM frame too large for short header.\n");
+            return AVERROR_INVALIDDATA;
+        }
+
+        bytestream2_init_writer(&pbc, pkt->data, offset);
+        hap_write_section_header(&pbc, HAP_HDR_SHORT,
+                                 offset - top_header_len,
                                  HAP_FMT_HAPM);
 
-        av_shrink_packet(pkt, header_total + compressed_size[0] + compressed_size[1]);
+        av_shrink_packet(pkt, offset);
         *got_packet = 1;
         return 0;
     }
