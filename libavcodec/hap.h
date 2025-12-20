@@ -103,7 +103,6 @@ av_cold void ff_hap_free_context(HapContext *ctx);
  * if the length is stored in the next long word. The fourth byte in the first
  * long word indicates the type of the current section. */
 int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
-                                enum HapSectionType *section_type,
-                                int *section_header);
+                                enum HapSectionType *section_type);
 
 #endif /* AVCODEC_HAP_H */

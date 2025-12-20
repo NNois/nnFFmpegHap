@@ -53,7 +53,6 @@ static int hapqa_extract(AVBSFContext *bsf, AVPacket *pkt)
     GetByteContext gbc;
     int section_size;
     enum HapSectionType section_type;
-    int section_header = 0;
     int start_section_size;
     int target_packet_size = 0;
     int ret = 0;
@@ -63,8 +62,7 @@ static int hapqa_extract(AVBSFContext *bsf, AVPacket *pkt)
         return ret;
 
     bytestream2_init(&gbc, pkt->data, pkt->size);
-    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type,
-                                      &section_header);
+    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type);
     if (ret != 0)
         goto fail;
 
@@ -74,26 +72,24 @@ static int hapqa_extract(AVBSFContext *bsf, AVPacket *pkt)
         goto fail;
     }
 
-    start_section_size = section_header;
+    start_section_size = 4;
 
     bytestream2_seek(&gbc, start_section_size, SEEK_SET);/* go to start of the first texture */
 
-    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type,
-                                      &section_header);
+    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type);
     if (ret != 0)
         goto fail;
 
-    target_packet_size = section_size + section_header;
+    target_packet_size = section_size + 4;
 
     if (check_texture(ctx, section_type) == 0) { /* the texture is not the one to keep */
-        start_section_size += section_header + section_size;
+        start_section_size += 4 + section_size;
         bytestream2_seek(&gbc, start_section_size, SEEK_SET);/* go to start of the second texture */
-        ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type,
-                                          &section_header);
+        ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type);
         if (ret != 0)
             goto fail;
 
-        target_packet_size = section_size + section_header;
+        target_packet_size = section_size + 4;
 
         if (check_texture(ctx, section_type) == 0){ /* the second texture is not the one to keep */
             av_log(bsf, AV_LOG_ERROR, "No valid texture found.\n");

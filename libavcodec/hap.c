@@ -57,11 +57,8 @@ av_cold void ff_hap_free_context(HapContext *ctx)
 }
 
 int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
-                                enum HapSectionType *section_type,
-                                int *section_header)
+                                enum HapSectionType *section_type)
 {
-    int header_length;
-
     if (bytestream2_get_bytes_left(gbc) < 4)
         return AVERROR_INVALIDDATA;
 
@@ -73,13 +70,7 @@ int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
             return AVERROR_INVALIDDATA;
 
         *section_size = bytestream2_get_le32(gbc);
-        header_length = 8;
-    } else {
-        header_length = 4;
     }
-
-    if (section_header)
-        *section_header = header_length;
 
     if (*section_size > bytestream2_get_bytes_left(gbc) || *section_size < 0)
         return AVERROR_INVALIDDATA;
