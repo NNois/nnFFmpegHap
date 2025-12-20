@@ -51,13 +51,17 @@ int ff_hap_set_chunk_count(HapContext *ctx, int count, int first_in_frame)
 av_cold void ff_hap_free_context(HapContext *ctx)
 {
     av_freep(&ctx->tex_buf);
+    av_freep(&ctx->tex_buf_alpha);
     av_freep(&ctx->chunks);
     av_freep(&ctx->chunk_results);
 }
 
 int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
-                                enum HapSectionType *section_type)
+                                enum HapSectionType *section_type,
+                                int *section_header)
 {
+    int header_length;
+
     if (bytestream2_get_bytes_left(gbc) < 4)
         return AVERROR_INVALIDDATA;
 
@@ -69,7 +73,13 @@ int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
             return AVERROR_INVALIDDATA;
 
         *section_size = bytestream2_get_le32(gbc);
+        header_length = 8;
+    } else {
+        header_length = 4;
     }
+
+    if (section_header)
+        *section_header = header_length;
 
     if (*section_size > bytestream2_get_bytes_left(gbc) || *section_size < 0)
         return AVERROR_INVALIDDATA;

@@ -75,6 +75,7 @@ typedef struct HapContext {
     size_t tex_size;         /* Size of the compressed texture */
 
     size_t max_snappy;       /* Maximum compressed size for snappy buffer */
+    size_t max_snappy_alpha; /* Maximum compressed size for HapM alpha snappy buffer */
 
     int texture_count;      /* 2 for HAPQA/HapM, 1 for other version */
     int texture_section_size; /* size of the part of the texture section (for HAPQA) */
@@ -102,6 +103,7 @@ av_cold void ff_hap_free_context(HapContext *ctx);
  * if the length is stored in the next long word. The fourth byte in the first
  * long word indicates the type of the current section. */
 int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
-                                enum HapSectionType *section_type);
+                                enum HapSectionType *section_type,
+                                int *section_header);
 
 #endif /* AVCODEC_HAP_H */

@@ -54,7 +54,7 @@ static int hap_parse_decode_instructions(HapContext *ctx, int size)
 
     while (size > 0) {
         int stream_remaining = bytestream2_get_bytes_left(gbc);
-        ret = ff_hap_parse_section_header(gbc, &section_size, &section_type);
+        ret = ff_hap_parse_section_header(gbc, &section_size, &section_type, NULL);
         if (ret != 0)
             return ret;
 
@@ -128,7 +128,7 @@ static int hap_can_use_tex_in_place(HapContext *ctx)
     return 1;
 }
 
-static int hap_parse_frame_header(AVCodecContext *avctx)
+static int hap_parse_frame_header(AVCodecContext *avctx, int *section_header)
 {
     HapContext *ctx = avctx->priv_data;
     GetByteContext *gbc = &ctx->gbc;
@@ -137,7 +137,8 @@ static int hap_parse_frame_header(AVCodecContext *avctx)
     const char *compressorstr;
     int i, ret;
 
-    ret = ff_hap_parse_section_header(gbc, &ctx->texture_section_size, &section_type);
+    ret = ff_hap_parse_section_header(gbc, &ctx->texture_section_size, &section_type,
+                                      section_header);
     if (ret != 0)
         return ret;
 
@@ -168,7 +169,7 @@ static int hap_parse_frame_header(AVCodecContext *avctx)
             }
             break;
         case HAP_COMP_COMPLEX:
-            ret = ff_hap_parse_section_header(gbc, &section_size, &section_type);
+            ret = ff_hap_parse_section_header(gbc, &section_size, &section_type, NULL);
             if (ret == 0 && section_type != HAP_ST_DECODE_INSTRUCTIONS)
                 ret = AVERROR_INVALIDDATA;
             if (ret == 0)
@@ -256,19 +257,21 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
     int section_size;
     enum HapSectionType section_type;
     int start_texture_section = 0;
+    int section_header_size = 0;
 
     bytestream2_init(&ctx->gbc, avpkt->data, avpkt->size);
 
     /* check for multi texture header */
     if (ctx->texture_count == 2) {
-        ret = ff_hap_parse_section_header(&ctx->gbc, &section_size, &section_type);
+        ret = ff_hap_parse_section_header(&ctx->gbc, &section_size, &section_type,
+                                          &section_header_size);
         if (ret != 0)
             return ret;
         if ((section_type & 0x0F) != 0x0D) {
             av_log(avctx, AV_LOG_ERROR, "Invalid section type in 2 textures mode %#04x.\n", section_type);
             return AVERROR_INVALIDDATA;
         }
-        start_texture_section = 4;
+        start_texture_section = section_header_size;
     }
 
     /* Get the output frame ready to receive data */
@@ -278,9 +281,10 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
 
     for (t = 0; t < ctx->texture_count; t++) {
         bytestream2_seek(&ctx->gbc, start_texture_section, SEEK_SET);
+        section_header_size = 0;
 
         /* Check for section header */
-        ret = hap_parse_frame_header(avctx);
+        ret = hap_parse_frame_header(avctx, &section_header_size);
         if (ret < 0)
             return ret;
 
@@ -291,7 +295,7 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
             return AVERROR_INVALIDDATA;
         }
 
-        start_texture_section += ctx->texture_section_size + 4;
+        start_texture_section += ctx->texture_section_size + section_header_size;
 
         /* Unpack the DXT texture */
         if (hap_can_use_tex_in_place(ctx)) {

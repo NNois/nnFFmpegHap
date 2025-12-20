@@ -167,13 +167,13 @@ static int hap_compress_frame(AVCodecContext *avctx, uint8_t *dst)
     return final_size;
 }
 
-static int hap_decode_instructions_length(HapContext *ctx)
+static int hap_decode_instructions_length(int chunk_count)
 {
     /*    Second-Stage Compressor Table (one byte per entry)
      *  + Chunk Size Table (four bytes per entry)
      *  + headers for both sections (short versions)
      *  = chunk_count + (4 * chunk_count) + 4 + 4 */
-    return (5 * ctx->chunk_count) + 8;
+    return (5 * chunk_count) + 8;
 }
 
 static int hap_header_length(HapContext *ctx)
@@ -181,62 +181,54 @@ static int hap_header_length(HapContext *ctx)
     /* Top section header (long version) */
     int length = HAP_HDR_LONG;
 
-    if (ctx->texture_count == 2) {
-        /* HapM: multi-texture container adds extra header + two texture section headers */
-        length += HAP_HDR_SHORT;  /* Multi-texture container header */
-        length += HAP_HDR_LONG * 2;  /* Two texture section headers */
-    } else if (ctx->chunk_count > 1) {
+    if (ctx->texture_count == 1 && ctx->chunk_count > 1) {
         /* Decode Instructions header (short) + Decode Instructions Container */
-        length += HAP_HDR_SHORT + hap_decode_instructions_length(ctx);
+        length += HAP_HDR_SHORT + hap_decode_instructions_length(ctx->chunk_count);
     }
 
     return length;
 }
 
-static void hap_write_frame_header(HapContext *ctx, uint8_t *dst, int frame_length)
+static int hap_texture_section_header_length(int chunk_count)
+{
+    int length = HAP_HDR_LONG;
+
+    if (chunk_count > 1)
+        length += HAP_HDR_SHORT + hap_decode_instructions_length(chunk_count);
+
+    return length;
+}
+
+static void hap_write_texture_header(HapContext *ctx, uint8_t *dst,
+                                     enum HapTextureFormat tex_fmt,
+                                     int chunk_count, int frame_length)
 {
     PutByteContext pbc;
     int i;
 
     bytestream2_init_writer(&pbc, dst, frame_length);
 
-    if (ctx->texture_count == 2) {
-        /* HapM: write multi-texture container header */
-        size_t tex_size_ycocg = ctx->tex_size - ctx->tex_size_alpha;
-        size_t tex_size_alpha = ctx->tex_size_alpha;
-
-        /* Top-level multi-texture container (0x0D) */
-        hap_write_section_header(&pbc, HAP_HDR_SHORT, frame_length - 12,
-                                 HAP_FMT_HAPM);
-
-        /* First texture section: DXT5-YCoCg */
-        hap_write_section_header(&pbc, HAP_HDR_LONG, tex_size_ycocg,
-                                 ctx->chunks[0].compressor | HAP_FMT_YCOCGDXT5);
-
-        /* Second texture section: RGTC1 alpha */
-        hap_write_section_header(&pbc, HAP_HDR_LONG, tex_size_alpha,
-                                 ctx->chunks[0].compressor | HAP_FMT_RGTC1);
-    } else if (ctx->chunk_count == 1) {
+    if (chunk_count == 1) {
         /* Write a simple header */
         hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
-                                 ctx->chunks[0].compressor | ctx->opt_tex_fmt);
+                                 ctx->chunks[0].compressor | tex_fmt);
     } else {
         /* Write a complex header with Decode Instructions Container */
         hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
-                                 HAP_COMP_COMPLEX | ctx->opt_tex_fmt);
-        hap_write_section_header(&pbc, HAP_HDR_SHORT, hap_decode_instructions_length(ctx),
+                                 HAP_COMP_COMPLEX | tex_fmt);
+        hap_write_section_header(&pbc, HAP_HDR_SHORT, hap_decode_instructions_length(chunk_count),
                                  HAP_ST_DECODE_INSTRUCTIONS);
-        hap_write_section_header(&pbc, HAP_HDR_SHORT, ctx->chunk_count,
+        hap_write_section_header(&pbc, HAP_HDR_SHORT, chunk_count,
                                  HAP_ST_COMPRESSOR_TABLE);
 
-        for (i = 0; i < ctx->chunk_count; i++) {
+        for (i = 0; i < chunk_count; i++) {
             bytestream2_put_byte(&pbc, ctx->chunks[i].compressor >> 4);
         }
 
-        hap_write_section_header(&pbc, HAP_HDR_SHORT, ctx->chunk_count * 4,
+        hap_write_section_header(&pbc, HAP_HDR_SHORT, chunk_count * 4,
                                  HAP_ST_SIZE_TABLE);
 
-        for (i = 0; i < ctx->chunk_count; i++) {
+        for (i = 0; i < chunk_count; i++) {
             bytestream2_put_le32(&pbc, ctx->chunks[i].compressed_size);
         }
     }
@@ -246,41 +238,127 @@ static int hap_encode(AVCodecContext *avctx, AVPacket *pkt,
                       const AVFrame *frame, int *got_packet)
 {
     HapContext *ctx = avctx->priv_data;
-    int header_length = hap_header_length(ctx);
-    int final_data_size, ret;
-    int pktsize = FFMAX(ctx->tex_size, ctx->max_snappy * ctx->chunk_count) + header_length;
+    int ret;
 
-    /* Allocate maximum size packet, shrink later. */
-    ret = ff_alloc_packet(avctx, pkt, pktsize);
-    if (ret < 0)
-        return ret;
+    if (ctx->texture_count == 1) {
+        int header_length = hap_header_length(ctx);
+        int final_data_size;
+        int pktsize = FFMAX(ctx->tex_size, ctx->max_snappy * ctx->chunk_count) + header_length;
 
-    if (ctx->opt_compressor == HAP_COMP_NONE) {
-        /* DXTC compression directly to the packet buffer. */
-        ret = compress_texture(avctx, pkt->data + header_length, pkt->size - header_length, frame);
+        /* Allocate maximum size packet, shrink later. */
+        ret = ff_alloc_packet(avctx, pkt, pktsize);
         if (ret < 0)
             return ret;
 
-        ctx->chunks[0].compressor = HAP_COMP_NONE;
-        final_data_size = ctx->tex_size;
+        if (ctx->opt_compressor == HAP_COMP_NONE) {
+            /* DXTC compression directly to the packet buffer. */
+            ret = compress_texture(avctx, pkt->data + header_length, pkt->size - header_length, frame);
+            if (ret < 0)
+                return ret;
+
+            ctx->chunks[0].compressor = HAP_COMP_NONE;
+            ctx->chunks[0].compressed_offset = 0;
+            ctx->chunks[0].compressed_size = ctx->tex_size;
+            final_data_size = ctx->tex_size;
+        } else {
+            /* DXTC compression. */
+            ret = compress_texture(avctx, ctx->tex_buf, ctx->tex_size, frame);
+            if (ret < 0)
+                return ret;
+
+            /* Compress (using Snappy) the frame */
+            final_data_size = hap_compress_frame(avctx, pkt->data + header_length);
+            if (final_data_size < 0)
+                return final_data_size;
+        }
+
+        /* Write header at the start. */
+        hap_write_texture_header(ctx, pkt->data, ctx->opt_tex_fmt, ctx->chunk_count,
+                                 final_data_size + header_length);
+
+        av_shrink_packet(pkt, final_data_size + header_length);
+        *got_packet = 1;
+        return 0;
     } else {
-        /* DXTC compression. */
-        ret = compress_texture(avctx, ctx->tex_buf, ctx->tex_size, frame);
+        int chunk_count = ctx->chunk_count;
+        int tex_header_len = hap_texture_section_header_length(chunk_count);
+        int top_header_len = HAP_HDR_LONG;
+        int max_payload[2];
+        int compressed_size[2];
+        int header_total = top_header_len + tex_header_len * ctx->texture_count;
+        int data_offset = header_total;
+        size_t tex_size_main = ctx->tex_size;
+        size_t tex_size_alpha = ctx->tex_size_alpha;
+        size_t max_snappy_main = ctx->max_snappy;
+        size_t max_snappy_alpha = ctx->max_snappy_alpha;
+        uint8_t *tex_buf_main = ctx->tex_buf;
+        PutByteContext pbc;
+        enum HapTextureFormat tex_formats[2] = { HAP_FMT_YCOCGDXT5, HAP_FMT_RGTC1 };
+
+        if (ctx->opt_compressor == HAP_COMP_SNAPPY) {
+            max_payload[0] = (int)(ctx->max_snappy * chunk_count);
+            max_payload[1] = (int)(ctx->max_snappy_alpha * chunk_count);
+        } else {
+            max_payload[0] = (int)ctx->tex_size;
+            max_payload[1] = (int)ctx->tex_size_alpha;
+        }
+
+        ret = ff_alloc_packet(avctx, pkt, header_total + max_payload[0] + max_payload[1]);
         if (ret < 0)
             return ret;
 
-        /* Compress (using Snappy) the frame */
-        final_data_size = hap_compress_frame(avctx, pkt->data + header_length);
-        if (final_data_size < 0)
-            return final_data_size;
+        for (int t = 0; t < ctx->texture_count; t++) {
+            TextureDSPThreadContext *enc = &ctx->enc[t];
+            uint8_t *texture_dst = pkt->data + data_offset;
+            size_t tex_size = t == 0 ? tex_size_main : tex_size_alpha;
+
+            enc->tex_data.out = (ctx->opt_compressor == HAP_COMP_NONE) ?
+                                texture_dst :
+                                (t == 0 ? tex_buf_main : ctx->tex_buf_alpha);
+            enc->frame_data.in = frame->data[0];
+            enc->stride = frame->linesize[0];
+            enc->width  = avctx->width;
+            enc->height = avctx->height;
+            ff_texturedsp_exec_compress_threads(avctx, enc);
+
+            if (ctx->opt_compressor == HAP_COMP_NONE) {
+                ctx->chunks[0].compressor = HAP_COMP_NONE;
+                ctx->chunks[0].compressed_offset = 0;
+                ctx->chunks[0].compressed_size = tex_size;
+                compressed_size[t] = (int)tex_size;
+            } else {
+                ctx->tex_size = tex_size;
+                ctx->max_snappy = t == 0 ? max_snappy_main : max_snappy_alpha;
+                ctx->tex_buf = (t == 0) ? tex_buf_main : ctx->tex_buf_alpha;
+
+                compressed_size[t] = hap_compress_frame(avctx, texture_dst);
+                if (compressed_size[t] < 0)
+                    return compressed_size[t];
+            }
+
+            hap_write_texture_header(ctx,
+                                     pkt->data + top_header_len + tex_header_len * t,
+                                     tex_formats[t],
+                                     chunk_count,
+                                     compressed_size[t] + tex_header_len);
+
+            data_offset += compressed_size[t];
+        }
+
+        ctx->tex_size = tex_size_main;
+        ctx->max_snappy = max_snappy_main;
+        ctx->tex_buf = tex_buf_main;
+
+        bytestream2_init_writer(&pbc, pkt->data,
+                                header_total + compressed_size[0] + compressed_size[1]);
+        hap_write_section_header(&pbc, HAP_HDR_LONG,
+                                 header_total + compressed_size[0] + compressed_size[1] - top_header_len,
+                                 HAP_FMT_HAPM);
+
+        av_shrink_packet(pkt, header_total + compressed_size[0] + compressed_size[1]);
+        *got_packet = 1;
+        return 0;
     }
-
-    /* Write header at the start. */
-    hap_write_frame_header(ctx, pkt->data, final_data_size + header_length);
-
-    av_shrink_packet(pkt, final_data_size + header_length);
-    *got_packet = 1;
-    return 0;
 }
 
 static av_cold int hap_init(AVCodecContext *avctx)
@@ -288,6 +366,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
     HapContext *ctx = avctx->priv_data;
     TextureDSPEncContext dxtc;
     int corrected_chunk_count;
+    int block_count;
     int ret = av_image_check_size(avctx->width, avctx->height, 0, avctx);
 
     if (ret < 0) {
@@ -350,16 +429,16 @@ static av_cold int hap_init(AVCodecContext *avctx)
     ctx->enc[0].raw_ratio = 16;
     ctx->enc[0].slice_count = av_clip(avctx->thread_count, 1, avctx->height / TEXTURE_BLOCK_H);
 
+    block_count = (avctx->width  / TEXTURE_BLOCK_W) *
+                  (avctx->height / TEXTURE_BLOCK_H);
+
     /* Texture compression ratio is constant, so can we computer
      * beforehand the final size of the uncompressed buffer. */
-    ctx->tex_size   = avctx->width  / TEXTURE_BLOCK_W *
-                      avctx->height / TEXTURE_BLOCK_H * ctx->enc[0].tex_ratio;
-
-    /* For HapM, add the second texture size */
-    if (ctx->texture_count == 2) {
-        ctx->tex_size += avctx->width  / TEXTURE_BLOCK_W *
-                         avctx->height / TEXTURE_BLOCK_H * ctx->enc[1].tex_ratio;
-    }
+    ctx->tex_size = block_count * ctx->enc[0].tex_ratio;
+    if (ctx->texture_count == 2)
+        ctx->tex_size_alpha = block_count * ctx->enc[1].tex_ratio;
+    else
+        ctx->tex_size_alpha = 0;
 
     switch (ctx->opt_compressor) {
     case HAP_COMP_NONE:
@@ -367,12 +446,14 @@ static av_cold int hap_init(AVCodecContext *avctx)
         corrected_chunk_count = 1;
 
         ctx->max_snappy = ctx->tex_size;
+        ctx->max_snappy_alpha = ctx->tex_size_alpha;
         ctx->tex_buf = NULL;
+        ctx->tex_buf_alpha = NULL;
         break;
     case HAP_COMP_SNAPPY:
         /* Round the chunk count to divide evenly on DXT block edges */
         corrected_chunk_count = av_clip(ctx->opt_chunk_count, 1, HAP_MAX_CHUNKS);
-        while ((ctx->tex_size / ctx->enc[0].tex_ratio) % corrected_chunk_count != 0) {
+        while (block_count % corrected_chunk_count != 0) {
             corrected_chunk_count--;
         }
 
@@ -380,6 +461,14 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->tex_buf = av_malloc(ctx->tex_size);
         if (!ctx->tex_buf) {
             return AVERROR(ENOMEM);
+        }
+        if (ctx->texture_count == 2) {
+            ctx->max_snappy_alpha = snappy_max_compressed_length(ctx->tex_size_alpha / corrected_chunk_count);
+            ctx->tex_buf_alpha = av_malloc(ctx->tex_size_alpha);
+            if (!ctx->tex_buf_alpha) {
+                av_freep(&ctx->tex_buf);
+                return AVERROR(ENOMEM);
+            }
         }
         break;
     default:
