@@ -1,63 +1,87 @@
-diff --git a/libavcodec/bsf/hapqa_extract.c b/libavcodec/bsf/hapqa_extract.c
-index 5c49a4de22..92f4669344 100644
---- a/libavcodec/bsf/hapqa_extract.c
-+++ b/libavcodec/bsf/hapqa_extract.c
-@@ -53,6 +53,7 @@ static int hapqa_extract(AVBSFContext *bsf, AVPacket *pkt)
-     GetByteContext gbc;
-     int section_size;
-     enum HapSectionType section_type;
-+    int section_header = 0;
-     int start_section_size;
-     int target_packet_size = 0;
-     int ret = 0;
-@@ -62,7 +63,8 @@ static int hapqa_extract(AVBSFContext *bsf, AVPacket *pkt)
-         return ret;
- 
-     bytestream2_init(&gbc, pkt->data, pkt->size);
--    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type);
-+    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type,
-+                                      &section_header);
-     if (ret != 0)
-         goto fail;
- 
-@@ -72,24 +74,26 @@ static int hapqa_extract(AVBSFContext *bsf, AVPacket *pkt)
-         goto fail;
-     }
- 
--    start_section_size = 4;
-+    start_section_size = section_header;
- 
-     bytestream2_seek(&gbc, start_section_size, SEEK_SET);/* go to start of the first texture */
- 
--    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type);
-+    ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type,
-+                                      &section_header);
-     if (ret != 0)
-         goto fail;
- 
--    target_packet_size = section_size + 4;
-+    target_packet_size = section_size + section_header;
- 
-     if (check_texture(ctx, section_type) == 0) { /* the texture is not the one to keep */
--        start_section_size += 4 + section_size;
-+        start_section_size += section_header + section_size;
-         bytestream2_seek(&gbc, start_section_size, SEEK_SET);/* go to start of the second texture */
--        ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type);
-+        ret = ff_hap_parse_section_header(&gbc, &section_size, &section_type,
-+                                          &section_header);
-         if (ret != 0)
-             goto fail;
- 
--        target_packet_size = section_size + 4;
-+        target_packet_size = section_size + section_header;
- 
-         if (check_texture(ctx, section_type) == 0){ /* the second texture is not the one to keep */
-             av_log(bsf, AV_LOG_ERROR, "No valid texture found.\n");
+diff --git a/README.md b/README.md
+index f8c23f2870..96f9306f5b 100644
+--- a/README.md
++++ b/README.md
+@@ -1,46 +1,28 @@
+-FFmpeg README
+-=============
+-
+-FFmpeg is a collection of libraries and tools to process multimedia content
+-such as audio, video, subtitles and related metadata.
+-
+-## Libraries
+-
+-* `libavcodec` provides implementation of a wider range of codecs.
+-* `libavformat` implements streaming protocols, container formats and basic I/O access.
+-* `libavutil` includes hashers, decompressors and miscellaneous utility functions.
+-* `libavfilter` provides means to alter decoded audio and video through a directed graph of connected filters.
+-* `libavdevice` provides an abstraction to access capture and playback devices.
+-* `libswresample` implements audio mixing and resampling routines.
+-* `libswscale` implements color conversion and scaling routines.
+-
+-## Tools
+-
+-* [ffmpeg](https://ffmpeg.org/ffmpeg.html) is a command line toolbox to
+-  manipulate, convert and stream multimedia content.
+-* [ffplay](https://ffmpeg.org/ffplay.html) is a minimalistic multimedia player.
+-* [ffprobe](https://ffmpeg.org/ffprobe.html) is a simple analysis tool to inspect
+-  multimedia content.
+-* Additional small tools such as `aviocat`, `ismindex` and `qt-faststart`.
+-
+-## Documentation
+-
+-The offline documentation is available in the **doc/** directory.
+-
+-The online documentation is available in the main [website](https://ffmpeg.org)
+-and in the [wiki](https://trac.ffmpeg.org).
+-
+-### Examples
+-
+-Coding examples are available in the **doc/examples** directory.
+-
+-## License
+-
+-FFmpeg codebase is mainly LGPL-licensed with optional components licensed under
+-GPL. Please refer to the LICENSE file for detailed information.
+-
+-## Contributing
+-
+-Patches should be submitted to the ffmpeg-devel mailing list using
+-`git format-patch` or `git send-email`. Github pull requests should be
+-avoided because they are not part of our review process and will be ignored.
++# FFmpeg (HAP fork)
++
++## Build quick start
++- Terminal: MSYS2 MINGW64.
++- Install deps: `./build-install-dependencies.sh`.
++- Build portable tools: `./build-static.sh` (bundles DLLs).
++- Copy with DLLs: `./build-copy-with-dlls.sh /c/path/to/app`.
++
++## What changed
++- HAP: fixed HapQ YCoCg transform, added HapA (alpha-only), and rebuilt HapM (Hap Q Alpha) multi-texture/chunk headers to match the spec.
++- Toolchain: Snappy/HAP enabled plus libvfw32 and build utilities wired into the latest build scripts.
++- Codecs kept: x264, x265, libvpx, vorbis/opus/lame, plus the usual FFmpeg stack.
++
++## HAP status
++- Working: Hap1 (DXT1), Hap5 (DXT5), HapY (DXT5-YCoCg scaled), HapA (RGTC1 alpha-only), HapM (DXT5-YCoCg + RGTC1 alpha).
++- Future prep: MOV tags added for HapR (`Hap7`) and Hap HDR (`HapH`); decoding is not implemented yet.
++- Quick checks: `./ffmpeg.exe -encoders | grep hap` and `./ffmpeg.exe -decoders | grep hap`.
++- Encode examples: `-c:v hap -format hap|hap_alpha|hap_q|hap_a|hap_m` (optionally add `-chunks N`).
++
++## DONE WORK (HAP)
++- HapA alpha-only support (details: `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavformat/isom_tags.c`).
++- HapQ YCoCg transform fix (details: `libavcodec/texturedsp.c` and HAP decode path).
++- HapM multi-texture headers and chunk layout (details: `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavcodec/bsf/hapqa_extract.c`).
++
++## TODO
++- [ ] Re-verify HapM playback/alpha with ffplay, Unreal HAP decoder, and the Adobe Hap encoder.
++- [ ] Implement HapR/HapH decoding when texture support is ready (HapR may stay unsupported in Unreal).
++- [ ] Keep build/test coverage for the HAP formats and Snappy path.
 diff --git a/libavcodec/hap.c b/libavcodec/hap.c
-index ac4032ce11..45263c57ee 100644
+index ac4032ce11..5ac0bccf1d 100644
 --- a/libavcodec/hap.c
 +++ b/libavcodec/hap.c
-@@ -51,13 +51,17 @@ int ff_hap_set_chunk_count(HapContext *ctx, int count, int first_in_frame)
+@@ -51,6 +51,7 @@ int ff_hap_set_chunk_count(HapContext *ctx, int count, int first_in_frame)
  av_cold void ff_hap_free_context(HapContext *ctx)
  {
      av_freep(&ctx->tex_buf);
@@ -65,34 +89,8 @@ index ac4032ce11..45263c57ee 100644
      av_freep(&ctx->chunks);
      av_freep(&ctx->chunk_results);
  }
- 
- int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
--                                enum HapSectionType *section_type)
-+                                enum HapSectionType *section_type,
-+                                int *section_header)
- {
-+    int header_length;
-+
-     if (bytestream2_get_bytes_left(gbc) < 4)
-         return AVERROR_INVALIDDATA;
- 
-@@ -69,8 +73,14 @@ int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
-             return AVERROR_INVALIDDATA;
- 
-         *section_size = bytestream2_get_le32(gbc);
-+        header_length = 8;
-+    } else {
-+        header_length = 4;
-     }
- 
-+    if (section_header)
-+        *section_header = header_length;
-+
-     if (*section_size > bytestream2_get_bytes_left(gbc) || *section_size < 0)
-         return AVERROR_INVALIDDATA;
-     else
 diff --git a/libavcodec/hap.h b/libavcodec/hap.h
-index 1de6d45428..7819d0a6b0 100644
+index 1de6d45428..49baab8f1f 100644
 --- a/libavcodec/hap.h
 +++ b/libavcodec/hap.h
 @@ -34,6 +34,7 @@ enum HapTextureFormat {
@@ -123,103 +121,21 @@ index 1de6d45428..7819d0a6b0 100644
  } HapContext;
  
  /*
-@@ -98,6 +103,7 @@ av_cold void ff_hap_free_context(HapContext *ctx);
-  * if the length is stored in the next long word. The fourth byte in the first
-  * long word indicates the type of the current section. */
- int ff_hap_parse_section_header(GetByteContext *gbc, int *section_size,
--                                enum HapSectionType *section_type);
-+                                enum HapSectionType *section_type,
-+                                int *section_header);
- 
- #endif /* AVCODEC_HAP_H */
 diff --git a/libavcodec/hapdec.c b/libavcodec/hapdec.c
-index 70bf592f2a..78961f4e12 100644
+index 70bf592f2a..c901df6e04 100644
 --- a/libavcodec/hapdec.c
 +++ b/libavcodec/hapdec.c
-@@ -54,7 +54,7 @@ static int hap_parse_decode_instructions(HapContext *ctx, int size)
- 
-     while (size > 0) {
-         int stream_remaining = bytestream2_get_bytes_left(gbc);
--        ret = ff_hap_parse_section_header(gbc, &section_size, &section_type);
-+        ret = ff_hap_parse_section_header(gbc, &section_size, &section_type, NULL);
-         if (ret != 0)
-             return ret;
- 
-@@ -128,7 +128,7 @@ static int hap_can_use_tex_in_place(HapContext *ctx)
-     return 1;
- }
- 
--static int hap_parse_frame_header(AVCodecContext *avctx)
-+static int hap_parse_frame_header(AVCodecContext *avctx, int *section_header)
- {
-     HapContext *ctx = avctx->priv_data;
-     GetByteContext *gbc = &ctx->gbc;
-@@ -137,7 +137,8 @@ static int hap_parse_frame_header(AVCodecContext *avctx)
-     const char *compressorstr;
-     int i, ret;
- 
--    ret = ff_hap_parse_section_header(gbc, &ctx->texture_section_size, &section_type);
-+    ret = ff_hap_parse_section_header(gbc, &ctx->texture_section_size, &section_type,
-+                                      section_header);
-     if (ret != 0)
-         return ret;
- 
-@@ -168,7 +169,7 @@ static int hap_parse_frame_header(AVCodecContext *avctx)
-             }
-             break;
-         case HAP_COMP_COMPLEX:
--            ret = ff_hap_parse_section_header(gbc, &section_size, &section_type);
-+            ret = ff_hap_parse_section_header(gbc, &section_size, &section_type, NULL);
-             if (ret == 0 && section_type != HAP_ST_DECODE_INSTRUCTIONS)
-                 ret = AVERROR_INVALIDDATA;
-             if (ret == 0)
-@@ -256,19 +257,21 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
-     int section_size;
-     enum HapSectionType section_type;
-     int start_texture_section = 0;
-+    int section_header_size = 0;
- 
-     bytestream2_init(&ctx->gbc, avpkt->data, avpkt->size);
- 
-     /* check for multi texture header */
-     if (ctx->texture_count == 2) {
--        ret = ff_hap_parse_section_header(&ctx->gbc, &section_size, &section_type);
-+        ret = ff_hap_parse_section_header(&ctx->gbc, &section_size, &section_type,
-+                                          &section_header_size);
-         if (ret != 0)
-             return ret;
-         if ((section_type & 0x0F) != 0x0D) {
-             av_log(avctx, AV_LOG_ERROR, "Invalid section type in 2 textures mode %#04x.\n", section_type);
-             return AVERROR_INVALIDDATA;
-         }
--        start_texture_section = 4;
-+        start_texture_section = section_header_size;
-     }
- 
-     /* Get the output frame ready to receive data */
-@@ -278,9 +281,10 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
+@@ -278,8 +278,6 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
  
      for (t = 0; t < ctx->texture_count; t++) {
          bytestream2_seek(&ctx->gbc, start_texture_section, SEEK_SET);
-+        section_header_size = 0;
- 
-         /* Check for section header */
--        ret = hap_parse_frame_header(avctx);
-+        ret = hap_parse_frame_header(avctx, &section_header_size);
+-
+-        /* Check for section header */
+         ret = hap_parse_frame_header(avctx);
          if (ret < 0)
              return ret;
- 
-@@ -291,7 +295,7 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
-             return AVERROR_INVALIDDATA;
-         }
- 
--        start_texture_section += ctx->texture_section_size + 4;
-+        start_texture_section += ctx->texture_section_size + section_header_size;
- 
-         /* Unpack the DXT texture */
-         if (hap_can_use_tex_in_place(ctx)) {
 diff --git a/libavcodec/hapenc.c b/libavcodec/hapenc.c
-index a0b199906d..5267a7e893 100644
+index a0b199906d..1a2d1d8ee0 100644
 --- a/libavcodec/hapenc.c
 +++ b/libavcodec/hapenc.c
 @@ -24,7 +24,7 @@
@@ -305,7 +221,7 @@ index a0b199906d..5267a7e893 100644
  }
  
  static int hap_header_length(HapContext *ctx)
-@@ -150,41 +181,54 @@ static int hap_header_length(HapContext *ctx)
+@@ -150,41 +181,56 @@ static int hap_header_length(HapContext *ctx)
      /* Top section header (long version) */
      int length = HAP_HDR_LONG;
  
@@ -320,9 +236,10 @@ index a0b199906d..5267a7e893 100644
  }
  
 -static void hap_write_frame_header(HapContext *ctx, uint8_t *dst, int frame_length)
-+static int hap_texture_section_header_length(int chunk_count)
++static int hap_texture_section_header_length(int chunk_count,
++                                             enum HapHeaderLength header_length)
 +{
-+    int length = HAP_HDR_LONG;
++    int length = header_length;
 +
 +    if (chunk_count > 1)
 +        length += HAP_HDR_SHORT + hap_decode_instructions_length(chunk_count);
@@ -332,7 +249,8 @@ index a0b199906d..5267a7e893 100644
 +
 +static void hap_write_texture_header(HapContext *ctx, uint8_t *dst,
 +                                     enum HapTextureFormat tex_fmt,
-+                                     int chunk_count, int frame_length)
++                                     int chunk_count, int frame_length,
++                                     enum HapHeaderLength header_length)
  {
      PutByteContext pbc;
      int i;
@@ -342,14 +260,16 @@ index a0b199906d..5267a7e893 100644
 +
 +    if (chunk_count == 1) {
          /* Write a simple header */
-         hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
+-        hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
 -                                 ctx->chunks[0].compressor | ctx->opt_tex_fmt);
++        hap_write_section_header(&pbc, header_length, frame_length - header_length,
 +                                 ctx->chunks[0].compressor | tex_fmt);
      } else {
          /* Write a complex header with Decode Instructions Container */
-         hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
+-        hap_write_section_header(&pbc, HAP_HDR_LONG, frame_length - 8,
 -                                 HAP_COMP_COMPLEX | ctx->opt_tex_fmt);
 -        hap_write_section_header(&pbc, HAP_HDR_SHORT, hap_decode_instructions_length(ctx),
++        hap_write_section_header(&pbc, header_length, frame_length - header_length,
 +                                 HAP_COMP_COMPLEX | tex_fmt);
 +        hap_write_section_header(&pbc, HAP_HDR_SHORT, hap_decode_instructions_length(chunk_count),
                                   HAP_ST_DECODE_INSTRUCTIONS);
@@ -371,7 +291,7 @@ index a0b199906d..5267a7e893 100644
              bytestream2_put_le32(&pbc, ctx->chunks[i].compressed_size);
          }
      }
-@@ -194,41 +238,127 @@ static int hap_encode(AVCodecContext *avctx, AVPacket *pkt,
+@@ -194,41 +240,139 @@ static int hap_encode(AVCodecContext *avctx, AVPacket *pkt,
                        const AVFrame *frame, int *got_packet)
  {
      HapContext *ctx = avctx->priv_data;
@@ -423,7 +343,7 @@ index a0b199906d..5267a7e893 100644
 +
 +        /* Write header at the start. */
 +        hap_write_texture_header(ctx, pkt->data, ctx->opt_tex_fmt, ctx->chunk_count,
-+                                 final_data_size + header_length);
++                                 final_data_size + header_length, HAP_HDR_LONG);
 +
 +        av_shrink_packet(pkt, final_data_size + header_length);
 +        *got_packet = 1;
@@ -432,12 +352,12 @@ index a0b199906d..5267a7e893 100644
 -        /* DXTC compression. */
 -        ret = compress_texture(avctx, ctx->tex_buf, ctx->tex_size, frame);
 +        int chunk_count = ctx->chunk_count;
-+        int tex_header_len = hap_texture_section_header_length(chunk_count);
-+        int top_header_len = HAP_HDR_LONG;
++        int tex_header_len = hap_texture_section_header_length(chunk_count, HAP_HDR_SHORT);
++        int top_header_len = HAP_HDR_SHORT;
 +        int max_payload[2];
 +        int compressed_size[2];
 +        int header_total = top_header_len + tex_header_len * ctx->texture_count;
-+        int data_offset = header_total;
++        int offset = top_header_len;
 +        size_t tex_size_main = ctx->tex_size;
 +        size_t tex_size_alpha = ctx->tex_size_alpha;
 +        size_t max_snappy_main = ctx->max_snappy;
@@ -465,6 +385,8 @@ index a0b199906d..5267a7e893 100644
 -    }
 +        for (int t = 0; t < ctx->texture_count; t++) {
 +            TextureDSPThreadContext *enc = &ctx->enc[t];
++            int header_offset = offset;
++            int data_offset = header_offset + tex_header_len;
 +            uint8_t *texture_dst = pkt->data + data_offset;
 +            size_t tex_size = t == 0 ? tex_size_main : tex_size_alpha;
 +
@@ -492,13 +414,19 @@ index a0b199906d..5267a7e893 100644
 +                    return compressed_size[t];
 +            }
 +
++            if ((size_t)compressed_size[t] > 0xFFFFFFU) {
++                av_log(avctx, AV_LOG_ERROR, "HapM texture section too large for short header.\n");
++                return AVERROR_INVALIDDATA;
++            }
++
 +            hap_write_texture_header(ctx,
-+                                     pkt->data + top_header_len + tex_header_len * t,
++                                     pkt->data + header_offset,
 +                                     tex_formats[t],
 +                                     chunk_count,
-+                                     compressed_size[t] + tex_header_len);
++                                     compressed_size[t] + tex_header_len,
++                                     HAP_HDR_SHORT);
 +
-+            data_offset += compressed_size[t];
++            offset = data_offset + compressed_size[t];
 +        }
  
 -    /* Write header at the start. */
@@ -510,20 +438,24 @@ index a0b199906d..5267a7e893 100644
 -    av_shrink_packet(pkt, final_data_size + header_length);
 -    *got_packet = 1;
 -    return 0;
-+        bytestream2_init_writer(&pbc, pkt->data,
-+                                header_total + compressed_size[0] + compressed_size[1]);
-+        hap_write_section_header(&pbc, HAP_HDR_LONG,
-+                                 header_total + compressed_size[0] + compressed_size[1] - top_header_len,
++        if ((size_t)offset - top_header_len > 0xFFFFFFU) {
++            av_log(avctx, AV_LOG_ERROR, "HapM frame too large for short header.\n");
++            return AVERROR_INVALIDDATA;
++        }
++
++        bytestream2_init_writer(&pbc, pkt->data, offset);
++        hap_write_section_header(&pbc, HAP_HDR_SHORT,
++                                 offset - top_header_len,
 +                                 HAP_FMT_HAPM);
 +
-+        av_shrink_packet(pkt, header_total + compressed_size[0] + compressed_size[1]);
++        av_shrink_packet(pkt, offset);
 +        *got_packet = 1;
 +        return 0;
 +    }
  }
  
  static av_cold int hap_init(AVCodecContext *avctx)
-@@ -236,6 +366,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
+@@ -236,6 +380,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
      HapContext *ctx = avctx->priv_data;
      TextureDSPEncContext dxtc;
      int corrected_chunk_count;
@@ -531,7 +463,7 @@ index a0b199906d..5267a7e893 100644
      int ret = av_image_check_size(avctx->width, avctx->height, 0, avctx);
  
      if (ret < 0) {
-@@ -252,36 +383,62 @@ static av_cold int hap_init(AVCodecContext *avctx)
+@@ -252,36 +397,62 @@ static av_cold int hap_init(AVCodecContext *avctx)
  
      ff_texturedspenc_init(&dxtc);
  
@@ -604,7 +536,7 @@ index a0b199906d..5267a7e893 100644
  
      switch (ctx->opt_compressor) {
      case HAP_COMP_NONE:
-@@ -289,12 +446,14 @@ static av_cold int hap_init(AVCodecContext *avctx)
+@@ -289,12 +460,14 @@ static av_cold int hap_init(AVCodecContext *avctx)
          corrected_chunk_count = 1;
  
          ctx->max_snappy = ctx->tex_size;
@@ -620,7 +552,7 @@ index a0b199906d..5267a7e893 100644
              corrected_chunk_count--;
          }
  
-@@ -303,6 +462,14 @@ static av_cold int hap_init(AVCodecContext *avctx)
+@@ -303,6 +476,14 @@ static av_cold int hap_init(AVCodecContext *avctx)
          if (!ctx->tex_buf) {
              return AVERROR(ENOMEM);
          }
@@ -635,7 +567,7 @@ index a0b199906d..5267a7e893 100644
          break;
      default:
          av_log(avctx, AV_LOG_ERROR, "Invalid compressor %02X\n", ctx->opt_compressor);
-@@ -331,10 +498,12 @@ static av_cold int hap_close(AVCodecContext *avctx)
+@@ -331,10 +512,12 @@ static av_cold int hap_close(AVCodecContext *avctx)
  #define OFFSET(x) offsetof(HapContext, x)
  #define FLAGS     AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
  static const AVOption options[] = {
@@ -649,7 +581,7 @@ index a0b199906d..5267a7e893 100644
      { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
      { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
          { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },
-@@ -361,6 +530,6 @@ const FFCodec ff_hap_encoder = {
+@@ -361,6 +544,6 @@ const FFCodec ff_hap_encoder = {
      .init           = hap_init,
      FF_CODEC_ENCODE_CB(hap_encode),
      .close          = hap_close,

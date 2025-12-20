@@ -23,6 +23,15 @@
 - HapM multi-texture headers and chunk layout (details: `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavcodec/bsf/hapqa_extract.c`).
 
 ## TODO
-- [ ] Re-verify HapM playback/alpha with ffplay, Unreal HAP decoder, and the Adobe Hap encoder.
 - [ ] Implement HapR/HapH decoding when texture support is ready (HapR may stay unsupported in Unreal).
 - [ ] Keep build/test coverage for the HAP formats and Snappy path.
+- [ ] HAP R (FFmpeg): BC5 textures (4 channels); FFmpeg already compresses BC5 internally in `libavcodec/texturedsp.c` and related modules (no external lib).
+- [ ] HAP R (Unreal): update HAPLib to latest `C:\ff\hap\source\hap.h` and `C:\ff\hap\source\hap.c` (Unreal ships `C:\Program Files\Epic Games\UE_5.7\Engine\Source\ThirdParty\HAPMedia\HAPLib\include\hap.h`).
+- [ ] HAP R (Unreal) example decode (raw BC5):
+
+```c
+unsigned long outputBufferBytes;
+HapDecode(inputBuffer, inputBufferBytes,
+          HapTextureFormat_RGTC1_Red, // or RGTC2
+          outputBuffer, &outputBufferBytes);
+```
