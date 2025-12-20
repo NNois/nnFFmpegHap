@@ -36,7 +36,7 @@ echo ""
     --enable-libopus \
     --enable-libmp3lame \
     --enable-libzimg \
-    --enable-libvfw32 \
+    --enable-indev=vfwcap \
     --extra-cflags="-O3"
 
 echo ""
