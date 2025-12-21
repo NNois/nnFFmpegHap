@@ -31,6 +31,7 @@
 
 enum HapTextureFormat {
     HAP_FMT_RGBDXT1   = 0x0B,
+    HAP_FMT_BPTC      = 0x0C,  /* RGBA BPTC (BC7) */
     HAP_FMT_RGBADXT5  = 0x0E,
     HAP_FMT_YCOCGDXT5 = 0x0F,
     HAP_FMT_RGTC1     = 0x01,

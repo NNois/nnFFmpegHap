@@ -26,7 +26,7 @@
  * @file
  * Hap decoder
  *
- * Fourcc: Hap1, Hap5, HapY, HapA, HapM
+ * Fourcc: Hap1, Hap5, HapY, HapA, HapM, Hap7
  *
  * https://github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md
  */
@@ -38,6 +38,7 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
+#include "bc7dec.h"
 #include "codec_internal.h"
 #include "hap.h"
 #include "snappy.h"
@@ -145,6 +146,7 @@ static int hap_parse_frame_header(AVCodecContext *avctx)
         (avctx->codec_tag == MKTAG('H','a','p','5') && (section_type & 0x0F) != HAP_FMT_RGBADXT5) ||
         (avctx->codec_tag == MKTAG('H','a','p','Y') && (section_type & 0x0F) != HAP_FMT_YCOCGDXT5) ||
         (avctx->codec_tag == MKTAG('H','a','p','A') && (section_type & 0x0F) != HAP_FMT_RGTC1) ||
+        (avctx->codec_tag == MKTAG('H','a','p','7') && (section_type & 0x0F) != HAP_FMT_BPTC) ||
         ((avctx->codec_tag == MKTAG('H','a','p','M') && (section_type & 0x0F) != HAP_FMT_RGTC1) &&
                                                         (section_type & 0x0F) != HAP_FMT_YCOCGDXT5)) {
         av_log(avctx, AV_LOG_ERROR,
@@ -384,6 +386,13 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->dec[0].raw_ratio = 4;
         avctx->pix_fmt = AV_PIX_FMT_GRAY8;
         break;
+    case MKTAG('H','a','p','7'):
+        texture_name = "BC7";
+        ctx->dec[0].tex_ratio = 16;
+        ctx->dec[0].tex_funct = ff_bc7dec_block;
+        avctx->pix_fmt = AV_PIX_FMT_RGBA;
+        /* BC7 decode is limited to modes 1 and 6 (bc7enc16 output). */
+        break;
     case MKTAG('H','a','p','M'):
         texture_name  = "DXT5-YCoCg-scaled / RGTC1";
         ctx->dec[0].tex_ratio = 16;
@@ -430,6 +439,7 @@ const FFCodec ff_hap_decoder = {
         MKTAG('H','a','p','5'),
         MKTAG('H','a','p','Y'),
         MKTAG('H','a','p','A'),
+        MKTAG('H','a','p','7'),
         MKTAG('H','a','p','M'),
         FF_CODEC_TAGS_END,
     },

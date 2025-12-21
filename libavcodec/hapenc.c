@@ -24,7 +24,7 @@
  * @file
  * Hap encoder
  *
- * Fourcc: Hap1, Hap5, HapY, HapA, HapM
+ * Fourcc: Hap1, Hap5, HapY, HapA, HapM, Hap7
  *
  * https://github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md
  */
@@ -39,6 +39,7 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
+#include "bc7enc16.h"
 #include "codec_internal.h"
 #include "encode.h"
 #include "hap.h"
@@ -406,6 +407,15 @@ static av_cold int hap_init(AVCodecContext *avctx)
         avctx->bits_per_coded_sample = 24;
         ctx->enc[0].tex_funct = dxtc.dxt1_block;
         break;
+    case HAP_FMT_BPTC: {
+        BC7Enc16Context bc7;
+        ff_bc7enc16_init(&bc7, BC7ENC16_TRUE, BC7ENC16_MAX_PARTITIONS1, 0);
+        ctx->enc[0].tex_ratio = 16;
+        avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
+        avctx->bits_per_coded_sample = 32;
+        ctx->enc[0].tex_funct = bc7.bc7enc16_block;
+        break;
+    }
     case HAP_FMT_RGBADXT5:
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '5');
@@ -514,6 +524,7 @@ static av_cold int hap_close(AVCodecContext *avctx)
 static const AVOption options[] = {
     { "format", NULL, OFFSET(opt_tex_fmt), AV_OPT_TYPE_INT, { .i64 = HAP_FMT_RGBDXT1 }, HAP_FMT_RGTC1, HAP_FMT_YCOCGDXT5, FLAGS, .unit = "format" },
         { "hap",       "Hap 1 (DXT1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBDXT1   }, 0, 0, FLAGS, .unit = "format" },
+        { "hap_r",     "Hap R (BC7 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC }, 0, 0, FLAGS, .unit = "format" },
         { "hap_alpha", "Hap Alpha (DXT5 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBADXT5  }, 0, 0, FLAGS, .unit = "format" },
         { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
