@@ -60,7 +60,7 @@ static int bc7enc16_block(uint8_t* dst, ptrdiff_t stride, const uint8_t* block)
     for (x = 0; x < 4; x++)
     {
       const uint8_t* src = block + x * 4 + y * stride;
-      uint8_t* dst = &pixels[y * 4 + x].m_c;
+      uint8_t* dst = pixels[y * 4 + x].m_c;
       dst[0] = src[0];
       dst[1] = src[1];
       dst[2] = src[2];

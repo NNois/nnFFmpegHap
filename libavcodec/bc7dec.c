@@ -53,6 +53,13 @@ typedef struct {
 	int index;
 } detexBlock128;
 
+uint32_t detexBlock128ExtractBits(detexBlock128 *block, int nu_bits);
+bool detexDecompressBlockBPTC(const uint8_t * DETEX_RESTRICT bitstring, uint32_t mode_mask,
+	uint32_t flags, uint8_t * DETEX_RESTRICT pixel_buffer);
+uint32_t detexGetModeBPTC(const uint8_t *bitstring);
+void detexSetModeBPTC(uint8_t *bitstring, uint32_t mode, uint32_t flags,
+	uint32_t *colors);
+
 uint32_t detexBlock128ExtractBits(detexBlock128 *block, int nu_bits) {
 	uint32_t value = 0;
 	for (int i = 0; i < nu_bits; i++) {
@@ -113,8 +120,6 @@ static DETEX_INLINE_ONLY uint32_t detexPack32RGBA8(int r, int g, int b, int a) {
 	return (uint32_t)r | ((uint32_t)g << 8) | ((uint32_t)b << 16) |
 		((uint32_t)a << 24);
 }
-
-uint32_t detexBlock128ExtractBits(detexBlock128 *block, int nu_bits);
 
 /* Return bitfield from bit0 to bit1 from 64-bit bitstring. */
 static DETEX_INLINE_ONLY uint32_t detexGetBits64(uint64_t data, int bit0, int bit1) {
