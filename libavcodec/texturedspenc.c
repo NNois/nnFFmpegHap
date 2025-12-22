@@ -571,22 +571,27 @@ static void compress_alpha(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
 }
 
 /**
- * Convert a RGBA buffer to unscaled YCoCg.
- * Scale is usually introduced to avoid banding over a certain range of colors,
- * but this version of the algorithm does not introduce it as much as other
- * implementations, allowing for a simpler and faster conversion.
+ * Convert a RGBA buffer to YCoCg using the standard transform.
+ * This follows the industry-standard YCoCg-DXT specification:
+ *   Y  = ( R + 2G + B) / 4
+ *   Co = ( R -  B) / 2
+ *   Cg = (-R + 2G - B) / 4
  */
 static void rgba2ycocg(uint8_t *dst, const uint8_t *pixel)
 {
-    int r =  pixel[0];
-    int g = (pixel[1] + 1) >> 1;
-    int b =  pixel[2];
-    int t = (2 + r + b) >> 2;
+    int r = pixel[0];
+    int g = pixel[1];
+    int b = pixel[2];
 
-    dst[0] = av_clip_uint8(128 + ((r - b + 1) >> 1));   /* Co */
-    dst[1] = av_clip_uint8(128 + g - t);                /* Cg */
+    /* Standard YCoCg transform */
+    int Co = ((r - b + 1) >> 1);                        /* Co = (R - B) / 2 */
+    int Cg = ((-r + (g << 1) - b + 2) >> 2);            /* Cg = (-R + 2G - B) / 4 */
+    int Y  = ((r + (g << 1) + b + 2) >> 2);             /* Y  = (R + 2G + B) / 4 */
+
+    dst[0] = av_clip_uint8(128 + Co);                   /* Co */
+    dst[1] = av_clip_uint8(128 + Cg);                   /* Cg */
     dst[2] = 0;
-    dst[3] = av_clip_uint8(g + t);                      /* Y */
+    dst[3] = av_clip_uint8(Y);                          /* Y */
 }
 
 /**
@@ -647,11 +652,53 @@ static int dxt5ys_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
     return 16;
 }
 
+/**
+ * Compress one block of grayscale pixels in an RGTC1 texture (BC4) and store the
+ * resulting bytes in 'dst'. This format uses the same compression as DXT5 alpha.
+ *
+ * @param dst    output buffer.
+ * @param stride scanline in bytes.
+ * @param block  block to compress.
+ * @return how much texture data has been written.
+ */
+static int rgtc1u_gray_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    int x, y;
+    uint8_t reorder[64];
+
+    /* Extract red channel as grayscale data */
+    for (y = 0; y < 4; y++)
+        for (x = 0; x < 4; x++)
+            reorder[3 + x * 4 + y * 16] = block[0 + x * 4 + y * stride];
+
+    compress_alpha(dst, 16, reorder);
+
+    return 8;
+}
+
+/**
+ * Compress one block of alpha channel pixels in an RGTC1 texture (BC4) and store the
+ * resulting bytes in 'dst'. This extracts and compresses the alpha channel.
+ *
+ * @param dst    output buffer.
+ * @param stride scanline in bytes.
+ * @param block  block to compress.
+ * @return how much texture data has been written.
+ */
+static int rgtc1u_alpha_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    compress_alpha(dst, stride, block);
+
+    return 8;
+}
+
 av_cold void ff_texturedspenc_init(TextureDSPEncContext *c)
 {
     c->dxt1_block         = dxt1_block;
     c->dxt5_block         = dxt5_block;
     c->dxt5ys_block       = dxt5ys_block;
+    c->rgtc1u_gray_block  = rgtc1u_gray_block;
+    c->rgtc1u_alpha_block = rgtc1u_alpha_block;
 }
 
 #define TEXTUREDSP_FUNC_NAME ff_texturedsp_exec_compress_threads
