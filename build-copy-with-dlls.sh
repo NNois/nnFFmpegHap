@@ -4,17 +4,17 @@
 
 set -e
 
-DEST_DIR="$1"
+FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
+FFMPEG_BIN="$FFMPEG_PREFIX/bin"
 
-if [ -z "$DEST_DIR" ]; then
-    echo "Usage: ./build-copy-with-dlls.sh <destination_directory>"
-    echo ""
-    echo "Example: ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
-    exit 1
-fi
+DEST_DIR="${1:-/c/AD/nnTools/tools/ffmpeg}"
 
 if [ ! -d "$DEST_DIR" ]; then
     echo "Error: Destination directory does not exist: $DEST_DIR"
+    exit 1
+fi
+if [ ! -d "$FFMPEG_BIN" ]; then
+    echo "Error: FFmpeg install bin not found: $FFMPEG_BIN"
     exit 1
 fi
 
@@ -26,33 +26,35 @@ echo ""
 
 # Copy executables
 echo "Copying executables..."
-cp -v ffmpeg.exe "$DEST_DIR/"
-cp -v ffplay.exe "$DEST_DIR/"
-cp -v ffprobe.exe "$DEST_DIR/"
+cp -v "$FFMPEG_BIN/ffmpeg.exe" "$DEST_DIR/"
+cp -v "$FFMPEG_BIN/ffplay.exe" "$DEST_DIR/"
+cp -v "$FFMPEG_BIN/ffprobe.exe" "$DEST_DIR/"
 
 # Copy DLLs - check both local directory and mingw64
 echo ""
 echo "Copying required DLLs..."
 
-# First, copy any DLLs already in the current directory (from rebuild-static.sh)
-LOCAL_DLLS=$(ls *.dll 2>/dev/null || true)
-if [ -n "$LOCAL_DLLS" ]; then
-    echo "Found DLLs in build directory:"
-    for dll in *.dll; do
-        if [ -f "$dll" ]; then
-            cp -v "$dll" "$DEST_DIR/"
-        fi
+# First, copy any DLLs from the install bin dir
+shopt -s nullglob
+FFMPEG_DLLS=("$FFMPEG_BIN"/*.dll)
+if [ ${#FFMPEG_DLLS[@]} -gt 0 ]; then
+    echo "Found DLLs in $FFMPEG_BIN:"
+    for dll in "${FFMPEG_DLLS[@]}"; do
+        cp -v "$dll" "$DEST_DIR/"
     done
 else
-    # If no local DLLs, find them from mingw64 (for rebuild-with-hap.sh builds)
-    echo "Finding DLLs from MINGW64..."
-    REQUIRED_DLLS=$(ldd ffprobe.exe ffplay.exe 2>/dev/null | grep mingw64 | awk '{print $3}' | sort -u)
-    for dll in $REQUIRED_DLLS; do
-        if [ -f "$dll" ]; then
-            cp -v "$dll" "$DEST_DIR/"
-        fi
-    done
+    echo "No DLLs found in $FFMPEG_BIN"
 fi
+
+# Always copy dependencies from MINGW64
+echo "Copying MINGW64 dependencies..."
+REQUIRED_DLLS=$(ldd "$FFMPEG_BIN/ffprobe.exe" "$FFMPEG_BIN/ffplay.exe" 2>/dev/null | grep mingw64 | awk '{print $3}' | sort -u)
+for dll in $REQUIRED_DLLS; do
+    if [ -f "$dll" ]; then
+        cp -v "$dll" "$DEST_DIR/"
+    fi
+done
+shopt -u nullglob
 
 # Ensure SDL2.dll is included for ffplay (not linked by ffprobe)
 if [ ! -f "$DEST_DIR/SDL2.dll" ]; then
