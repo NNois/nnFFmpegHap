@@ -839,7 +839,7 @@ void detexSetModeBPTC(uint8_t *bitstring, uint32_t mode, uint32_t flags,
 int ff_bc7dec_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
 {
     uint8_t tmp[16 * 4];
-    const uint32_t mode_mask = (1U << 1) | (1U << 6);
+    const uint32_t mode_mask = (1U << 1) | (1U << 5) | (1U << 6) | (1U << 7);
     const uint32_t flags = DETEX_DECOMPRESS_FLAG_ENCODE;
 
     if (!detexDecompressBlockBPTC(block, mode_mask, flags, tmp)) {

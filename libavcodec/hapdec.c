@@ -391,7 +391,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->dec[0].tex_ratio = 16;
         ctx->dec[0].tex_funct = ff_bc7dec_block;
         avctx->pix_fmt = AV_PIX_FMT_RGBA;
-        /* BC7 decode is limited to modes 1 and 6 (current encoder output). */
+        /* BC7 decode is limited to modes 1/5/6/7 (current encoder output). */
         break;
     case MKTAG('H','a','p','M'):
         texture_name  = "DXT5-YCoCg-scaled / RGTC1";

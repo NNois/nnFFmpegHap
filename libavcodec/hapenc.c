@@ -409,7 +409,8 @@ static av_cold int hap_init(AVCodecContext *avctx)
         break;
     case HAP_FMT_BPTC: {
         BC7EncContext bc7;
-        ff_bc7enc_init(&bc7, BC7ENC_TRUE, BC7ENC_MAX_PARTITIONS1, 0, BC7ENC_FALSE, BC7ENC_FALSE);
+        ff_bc7enc_init(&bc7, BC7ENC_TRUE, BC7ENC_MAX_PARTITIONS1, ctx->opt_bc7_uber_level,
+                       BC7ENC_TRUE, BC7ENC_TRUE);
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
         avctx->bits_per_coded_sample = 32;
@@ -529,6 +530,7 @@ static const AVOption options[] = {
         { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
+    { "bc7_uber", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_uber_level), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },
