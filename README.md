@@ -11,6 +11,15 @@
 - Toolchain: Snappy/HAP enabled plus libvfw32 and build utilities wired into the latest build scripts.
 - Codecs kept: x264, x265, libvpx, vorbis/opus/lame, plus the usual FFmpeg stack.
 
+## Contributing notes
+- See `adwork/README.md` for FFmpeg patch submission guidance and third-party source acknowledgments.
+
+## HAP patch series (4 commits)
+- [ ] `adwork/0001-hapq-ycocg-transform.patch`: fix YCoCg transform used by HapQ/HapM (`libavcodec/texturedspenc.c`).
+- [ ] `adwork/0002-hapa-alpha-only.patch`: add HapA encoder + RGTC1 grayscale block (`libavcodec/hapenc.c`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
+- [ ] `adwork/0003-hapm-qalpha.patch`: HapM multi-texture encoder path + headers (`libavcodec/hapenc.c`, `libavcodec/hap.c`, `libavcodec/hap.h`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
+- [ ] `adwork/0004-hap7-bc7.patch`: HapR (Hap7) BC7 encode/decode + tags (`libavcodec/bc7*`, `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavcodec/hap.h`, `libavformat/isom_tags.c`, `libavcodec/Makefile`).
+
 ## HAP formats (quick map)
 | HAP format     | Texture compression                                     | FourCC | Bits                     |
 |----------------|---------------------------------------------------------|--------|--------------------------|
