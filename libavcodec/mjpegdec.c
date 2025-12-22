@@ -343,6 +343,8 @@ int ff_mjpeg_decode_sof(MJpegDecodeContext *s)
     av_log(s->avctx, AV_LOG_DEBUG, "sof0: picture: %dx%d\n", width, height);
     if (av_image_check_size(width, height, 0, s->avctx) < 0)
         return AVERROR_INVALIDDATA;
+
+    // A valid frame requires at least 1 bit for DC + 1 bit for AC for each 8x8 block.
     if (s->buf_size && (width + 7) / 8 * ((height + 7) / 8) > s->buf_size * 4LL)
         return AVERROR_INVALIDDATA;
 
@@ -2875,15 +2877,15 @@ the_end:
             AVFrameSideData *sd = NULL;
 
             if (orientation >= 2 && orientation <= 8) {
-                int32_t *matrix;
-
-                sd = av_frame_new_side_data(frame, AV_FRAME_DATA_DISPLAYMATRIX, sizeof(int32_t) * 9);
-                if (!sd) {
+                ret = ff_frame_new_side_data(avctx, frame, AV_FRAME_DATA_DISPLAYMATRIX, sizeof(int32_t) * 9, &sd);
+                if (ret < 0) {
                     av_log(avctx, AV_LOG_ERROR, "Could not allocate frame side data\n");
-                    return AVERROR(ENOMEM);
+                    return ret;
                 }
+            }
 
-                matrix = (int32_t *)sd->data;
+            if (sd) {
+                int32_t *matrix = (int32_t *)sd->data;
 
                 switch (orientation) {
                 case 2:
