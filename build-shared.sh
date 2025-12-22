@@ -17,6 +17,8 @@ echo ""
 echo "Step 1: Cleaning previous build..."
 make clean 2>/dev/null || true
 rm -f config.h config.log ffbuild/config.mak 2>/dev/null || true
+rm -rf "$FFMPEG_PREFIX" 2>/dev/null || true
+rm -f ./*.dll 2>/dev/null || true
 
 echo ""
 echo "Step 2: Configuring build options (SHARED BUILD):"
@@ -25,7 +27,6 @@ echo "  - Link: --enable-shared --disable-static"
 echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libzimg"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame"
 echo "  - HAP: --enable-libsnappy"
-echo "  - Capture: --enable-indev=vfwcap"
 echo "  - CFLAGS: -O3"
 echo ""
 
@@ -45,7 +46,6 @@ echo ""
     --enable-libopus \
     --enable-libmp3lame \
     --enable-libzimg \
-    --enable-indev=vfwcap \
     --extra-cflags="-O3"
 
 echo ""
@@ -121,12 +121,12 @@ echo "and will work from PowerShell, CMD, and Python apps"
 echo "without requiring MSYS2."
 echo ""
 echo "To deploy to your app, use:"
-echo "  ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
+echo "  ./build-copy-with-dlls-shared.sh /c/AD/nnTools/tools/ffmpeg"
 echo ""
 echo "Run it now? (Y/n)"
 read -r RUN_COPY
 RUN_COPY=${RUN_COPY:-Y}
 if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
-    ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg
+    ./build-copy-with-dlls-shared.sh /c/AD/nnTools/tools/ffmpeg
 fi
 echo ""
