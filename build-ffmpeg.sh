@@ -118,9 +118,10 @@ echo ""
 echo "To deploy to your app, use:"
 echo "  ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
 echo ""
-echo "Run it now? (y/N)"
+echo "Run it now? (Y/n)"
 read -r RUN_COPY
-if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
+RUN_COPY=${RUN_COPY:-Y}
+if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
     ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg
 fi
 echo ""

@@ -89,11 +89,11 @@ echo "    - zimg (zscale filter for high-quality scaling)"
 echo ""
 echo ""
 echo "You can now build FFmpeg with:"
-echo "  ./build-static.sh"
+echo "  ./build-ffmpeg.sh"
 echo ""
-echo "Run it now? (y/N)"
+echo "Run it now? (Y/n)"
 read -r RUN_BUILD
-if [ "$RUN_BUILD" = "y" ] || [ "$RUN_BUILD" = "Y" ]; then
-    ./build-static.sh
+if [ -z "$RUN_BUILD" ] || [ "$RUN_BUILD" = "y" ] || [ "$RUN_BUILD" = "Y" ]; then
+    ./build-ffmpeg.sh
 fi
 echo ""
