@@ -39,7 +39,7 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "bc7enc16.h"
+#include "bc7enc.h"
 #include "codec_internal.h"
 #include "encode.h"
 #include "hap.h"
@@ -408,12 +408,12 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->enc[0].tex_funct = dxtc.dxt1_block;
         break;
     case HAP_FMT_BPTC: {
-        BC7Enc16Context bc7;
-        ff_bc7enc16_init(&bc7, BC7ENC16_TRUE, BC7ENC16_MAX_PARTITIONS1, 0);
+        BC7EncContext bc7;
+        ff_bc7enc_init(&bc7, BC7ENC_TRUE, BC7ENC_MAX_PARTITIONS1, 0, BC7ENC_FALSE, BC7ENC_FALSE);
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
         avctx->bits_per_coded_sample = 32;
-        ctx->enc[0].tex_funct = bc7.bc7enc16_block;
+        ctx->enc[0].tex_funct = bc7.bc7enc_block;
         break;
     }
     case HAP_FMT_RGBADXT5:

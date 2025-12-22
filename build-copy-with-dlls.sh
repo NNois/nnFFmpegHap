@@ -7,9 +7,9 @@ set -e
 DEST_DIR="$1"
 
 if [ -z "$DEST_DIR" ]; then
-    echo "Usage: ./copy-with-dlls.sh <destination_directory>"
+    echo "Usage: ./build-copy-with-dlls.sh <destination_directory>"
     echo ""
-    echo "Example: ./copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
+    echo "Example: ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
     exit 1
 fi
 
@@ -46,10 +46,20 @@ if [ -n "$LOCAL_DLLS" ]; then
 else
     # If no local DLLs, find them from mingw64 (for rebuild-with-hap.sh builds)
     echo "Finding DLLs from MINGW64..."
-    REQUIRED_DLLS=$(ldd ffprobe.exe | grep mingw64 | awk '{print $3}')
+    REQUIRED_DLLS=$(ldd ffprobe.exe ffplay.exe 2>/dev/null | grep mingw64 | awk '{print $3}' | sort -u)
     for dll in $REQUIRED_DLLS; do
         if [ -f "$dll" ]; then
             cp -v "$dll" "$DEST_DIR/"
+        fi
+    done
+fi
+
+# Ensure SDL2.dll is included for ffplay (not linked by ffprobe)
+if [ ! -f "$DEST_DIR/SDL2.dll" ]; then
+    for sdl in /mingw64/bin/SDL2.dll /c/msys64/mingw64/bin/SDL2.dll; do
+        if [ -f "$sdl" ]; then
+            cp -v "$sdl" "$DEST_DIR/"
+            break
         fi
     done
 fi
