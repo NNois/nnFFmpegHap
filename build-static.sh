@@ -116,11 +116,11 @@ echo "and will work from PowerShell, CMD, and Python apps"
 echo "without requiring MSYS2."
 echo ""
 echo "To deploy to your app, use:"
-echo "  ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg"
+echo "  ./build-copy-with-dlls-static.sh /c/AD/nnTools/tools/ffmpeg"
 echo ""
 echo "Run it now? (y/N)"
 read -r RUN_COPY
 if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
-    ./build-copy-with-dlls.sh /c/AD/nnTools/tools/ffmpeg
+    ./build-copy-with-dlls-static.sh /c/AD/nnTools/tools/ffmpeg
 fi
 echo ""
