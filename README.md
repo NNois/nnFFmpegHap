@@ -11,14 +11,11 @@
 - Toolchain: Snappy/HAP enabled plus libvfw32 and build utilities wired into the latest build scripts.
 - Codecs kept: x264, x265, libvpx, vorbis/opus/lame, plus the usual FFmpeg stack.
 
-## Contributing notes
-- See `adwork/README.md` for FFmpeg patch submission guidance and third-party source acknowledgments.
-
 ## HAP patch series (4 commits)
-- [ ] `adwork/0001-hapq-ycocg-transform.patch`: fix YCoCg transform used by HapQ/HapM (`libavcodec/texturedspenc.c`).
-- [ ] `adwork/0002-hapa-alpha-only.patch`: add HapA encoder + RGTC1 grayscale block (`libavcodec/hapenc.c`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
-- [ ] `adwork/0003-hapm-qalpha.patch`: HapM multi-texture encoder path + headers (`libavcodec/hapenc.c`, `libavcodec/hap.c`, `libavcodec/hap.h`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
-- [ ] `adwork/0004-hap7-bc7.patch`: HapR (Hap7) BC7 encode/decode + tags (`libavcodec/bc7*`, `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavcodec/hap.h`, `libavformat/isom_tags.c`, `libavcodec/Makefile`).
+- [ ] `nnHapWork/0001-hapq-ycocg-transform.patch`: fix YCoCg transform used by HapQ/HapM (`libavcodec/texturedspenc.c`).
+- [ ] `nnHapWork/0002-hapa-alpha-only.patch`: add HapA encoder + RGTC1 grayscale block (`libavcodec/hapenc.c`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
+- [ ] `nnHapWork/0003-hapm-qalpha.patch`: HapM multi-texture encoder path + headers (`libavcodec/hapenc.c`, `libavcodec/hap.c`, `libavcodec/hap.h`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
+- [ ] `nnHapWork/0004-hap7-bc7.patch`: HapR (Hap7) BC7 encode/decode + tags (`libavcodec/bc7*`, `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavcodec/hap.h`, `libavformat/isom_tags.c`, `libavcodec/Makefile`).
 
 ## HAP formats (quick map)
 | HAP format     | Texture compression                                     | FourCC | Bits                     |
@@ -54,34 +51,4 @@
 - BC7 modes quick notes: Mode 0 = 3 subsets, RGB, 4-bit endpoints + pbits, 3-bit indices (no alpha). Mode 1 = 2 subsets, RGB, 6-bit endpoints + shared pbits, 3-bit indices (no alpha). Mode 2 = 3 subsets, RGB, 5-bit endpoints, 2-bit indices (no alpha). Mode 3 = 2 subsets, RGB, 7-bit endpoints + pbits, 2-bit indices (no alpha). Mode 4 = 1 subset, RGBA, RGB 5-bit + A 6-bit endpoints, dual index sets, component rotation (alpha). Mode 5 = 1 subset, RGBA, RGB 7-bit + A 8-bit endpoints, 2-bit indices, component rotation (alpha). Mode 6 = 1 subset, RGBA, 7-bit endpoints + pbit (8-bit effective), 4-bit indices (alpha). Mode 7 = 2 subsets, RGBA, 5-bit endpoints + pbits, 2-bit indices (alpha).
 
 
-## Unreal engine notes:
-- [ ] HAP R (Unreal): update HAPLib to latest `C:\ff\hap\source\hap.h` and `C:\ff\hap\source\hap.c` (Unreal ships `C:\Program Files\Epic Games\UE_5.7\Engine\Source\ThirdParty\HAPMedia\HAPLib\include\hap.h`).
-- HAP R (Unreal) example decode (raw BC7):
-```
-const void *inputBuffer;      // Frame HAP R compressée
-unsigned long inputBufferBytes; // Taille du buffer d'entrée
-void *outputBuffer;           // Buffer de sortie pour BC7
-unsigned long outputBufferBytes; // Taille allouée pour la sortie
-unsigned long outputBufferBytesUsed; // Taille réellement utilisée
-unsigned int outputTextureFormat;
 
-// Décoder la frame HAP R (index 0 pour la première/seule texture)
-unsigned int result = HapDecode(
-    inputBuffer, inputBufferBytes,
-    0,                    // index (0 pour la première texture)
-    NULL,                 // callback (NULL si pas de multithreading)
-    NULL,                 // info (contexte utilisateur pour callback)
-    outputBuffer, outputBufferBytes,
-    &outputBufferBytesUsed,
-    &outputTextureFormat
-);
-
-if (result == HapResult_No_Error) {
-    // Vérifier le format de texture
-    if (outputTextureFormat == HapTextureFormat_RGBA_BPTC_UNORM) {
-        // C'est bien du BC7 (BPTC) !
-        // outputBuffer contient maintenant les données BC7 brutes
-        // Prêtes à être uploadées vers une texture GPU dans Unreal
-    }
-}
-```

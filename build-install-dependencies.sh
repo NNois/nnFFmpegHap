@@ -60,6 +60,7 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-zimg
 
 echo ""
+echo ""
 echo "=========================================="
 echo "✓ All Dependencies Installed!"
 echo "=========================================="
@@ -86,6 +87,13 @@ echo "    - SDL2 (video playback for ffplay)"
 echo "    - zlib & bzip2 (compression)"
 echo "    - zimg (zscale filter for high-quality scaling)"
 echo ""
+echo ""
 echo "You can now build FFmpeg with:"
 echo "  ./build-static.sh"
+echo ""
+echo "Run it now? (y/N)"
+read -r RUN_BUILD
+if [ "$RUN_BUILD" = "y" ] || [ "$RUN_BUILD" = "Y" ]; then
+    ./build-static.sh
+fi
 echo ""
