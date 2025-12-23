@@ -87,3 +87,28 @@ echo ""
 echo "You can now use these executables from PowerShell or CMD."
 echo ""
 
+# Ask if user wants to build mpv now
+if [ -d "/c/ff/mpv" ]; then
+    echo "=========================================="
+    echo "Build mpv with updated FFmpeg?"
+    echo "=========================================="
+    read -p "Do you want to build mpv now? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        echo "Starting mpv build..."
+        cd /c/ff/mpv
+        if [ -f "./build-mpv.sh" ]; then
+            ./build-mpv.sh
+        else
+            echo "Warning: build-mpv.sh not found in /c/ff/mpv"
+            echo "You can build mpv manually by running:"
+            echo "  cd /c/ff/mpv && meson compile -C build"
+        fi
+    else
+        echo "Skipping mpv build."
+        echo "To build mpv later, run:"
+        echo "  cd /c/ff/mpv && ./build-mpv.sh"
+    fi
+fi
+
