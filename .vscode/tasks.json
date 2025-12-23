@@ -1,0 +1,145 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build FFmpeg (Shared)",
+            "type": "shell",
+            "command": "./build-shared.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build FFmpeg (Static)",
+            "type": "shell",
+            "command": "./build-static.sh",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Copy FFmpeg DLLs (Shared)",
+            "type": "shell",
+            "command": "./build-copy-with-dlls-shared.sh",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Copy FFmpeg DLLs (Static)",
+            "type": "shell",
+            "command": "./build-copy-with-dlls-static.sh",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Full Build Shared (Build + Deploy)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Build FFmpeg (Shared)",
+                "Copy FFmpeg DLLs (Shared)"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Full Build Static (Build + Deploy)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Build FFmpeg (Static)",
+                "Copy FFmpeg DLLs (Static)"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Apply HAP Patches",
+            "type": "shell",
+            "command": "./build-apply-hap-patches.sh",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Verify Build",
+            "type": "shell",
+            "command": "./build-verify.sh",
+            "group": "test",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install FFmpeg Dependencies",
+            "type": "shell",
+            "command": "./build-install-dependencies.sh",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Configure FFmpeg",
+            "type": "shell",
+            "command": "./configure --help",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test FFmpeg HAP Support",
+            "type": "shell",
+            "command": "./ffmpeg -version && echo '' && ./ffmpeg -encoders | grep -i hap && ./ffmpeg -decoders | grep -i hap",
+            "group": "test",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        }
+    ]
+}

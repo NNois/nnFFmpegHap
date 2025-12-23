@@ -1,0 +1,44 @@
+{
+    // Terminal configuration for MSYS2 MINGW64
+    "terminal.integrated.profiles.windows": {
+        "MSYS2 MINGW64": {
+            "path": "C:\\tools\\msys64\\usr\\bin\\bash.exe",
+            "args": [
+                "--login",
+                "-i"
+            ],
+            "env": {
+                "MSYSTEM": "MINGW64",
+                "CHERE_INVOKING": "1"
+            },
+            "icon": "terminal-bash"
+        },
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell"
+        },
+        "Command Prompt": {
+            "path": [
+                "${env:windir}\\Sysnative\\cmd.exe",
+                "${env:windir}\\System32\\cmd.exe"
+            ],
+            "args": [],
+            "icon": "terminal-cmd"
+        }
+    },
+    // Set MSYS2 MINGW64 as the default terminal
+    "terminal.integrated.defaultProfile.windows": "MSYS2 MINGW64",
+
+    // Optional: Set shell for tasks to use MSYS2
+    "terminal.integrated.automationProfile.windows": {
+        "path": "C:\\tools\\msys64\\usr\\bin\\bash.exe",
+        "args": [
+            "--login",
+            "-i"
+        ],
+        "env": {
+            "MSYSTEM": "MINGW64",
+            "CHERE_INVOKING": "1"
+        }
+    }
+}
