@@ -11,12 +11,6 @@
 - Toolchain: Snappy/HAP enabled plus libvfw32 and build utilities wired into the latest build scripts.
 - Codecs kept: x264, x265, libvpx, vorbis/opus/lame, plus the usual FFmpeg stack.
 
-## HAP patch series (4 commits)
-- [ ] `nnHapWork/0001-hapq-ycocg-transform.patch`: fix YCoCg transform used by HapQ/HapM (`libavcodec/texturedspenc.c`).
-- [ ] `nnHapWork/0002-hapa-alpha-only.patch`: add HapA encoder + RGTC1 grayscale block (`libavcodec/hapenc.c`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
-- [ ] `nnHapWork/0003-hapm-qalpha.patch`: HapM multi-texture encoder path + headers (`libavcodec/hapenc.c`, `libavcodec/hap.c`, `libavcodec/hap.h`, `libavcodec/texturedspenc.c`, `libavcodec/texturedsp.h`).
-- [ ] `nnHapWork/0004-hap7-bc7.patch`: HapR (Hap7) BC7 encode/decode + tags (`libavcodec/bc7*`, `libavcodec/hapenc.c`, `libavcodec/hapdec.c`, `libavcodec/hap.h`, `libavformat/isom_tags.c`, `libavcodec/Makefile`).
-
 ## HAP formats (quick map)
 | HAP format     | Texture compression                                     | FourCC | Bits                     |
 |----------------|---------------------------------------------------------|--------|--------------------------|
@@ -38,10 +32,8 @@
 - [x] Encode examples: `-c:v hap -format hap|hap_alpha|hap_q|hap_a|hap_m|hap_r` (optionally add `-chunks N`; HapR quality: `-bc7_uber N`).
 - [x] HapR `-bc7_uber` range: `0..4` (0 = fastest/default, higher = slower with better quality).
 - [x] MOV tags added for Hap HDR (`HapH`) (tag only, no codec support).
-- [ ] HAP R (FFmpeg): BC7 decode is limited to modes 1/5/6/7 (bc7enc output). Add modes 0/2/3/4 for full BC7 compatibility.
-- [ ] HAP R (FFmpeg): evaluate `bc7enc` / `bc7enc_rdo` for better quality (RDO, broader mode use) vs `bc7enc16`.
-- [ ] Keep build/test coverage for the HAP formats and Snappy path.
-- [ ] Hap H decoding/encoding is not implemented yet.
+- [x] HAP R (FFmpeg): BC7 decode is limited to modes 1/5/6/7 (bc7enc output). Add modes 0/2/3/4 for full BC7 compatibility.
+- [ ] HAP R (FFmpeg): evaluate `bc7e` or `bc7enc_rdo`  for better quality (RDO, broader mode use) vs `bc7enc16`.
 
 
 ## TODO: BC7 (HapR) status and work
