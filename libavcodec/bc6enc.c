@@ -567,9 +567,6 @@ static float optQuantAnD_d(
     int maxTry = (int)(maxTryBase * quality);
     int try_two = 50;
 
-    if (maxTry < 1)
-        maxTry = 1;
-
     int i, j, k;
     float t, s;
 
@@ -2183,12 +2180,6 @@ static void bc6h_encoder_init(BC6HBlockEncoder *enc)
 
 
 
-
-
-
-
-
-#define USE_SHAKERHD  // reserved for future use!
 
 
 
@@ -3876,20 +3867,29 @@ static int bc6enc_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
 }
 
 void ff_bc6enc_init(BC6EncContext *c, int is_signed, uint16_t mode_mask,
-                    float exposure, float quality, int use_pattern)
+                    float exposure, int quality, int use_pattern)
 {
     ff_bc6enc_init_input(c, is_signed, mode_mask, exposure, quality,
                          use_pattern, BC6ENC_INPUT_RGBF16, 0);
 }
 
 void ff_bc6enc_init_input(BC6EncContext *c, int is_signed, uint16_t mode_mask,
-                          float exposure, float quality, int use_pattern,
+                          float exposure, int quality, int use_pattern,
                           BC6EncInputFormat input_fmt, int max_try)
 {
+    float quality_scale;
+
+    if (quality <= 0)
+        quality_scale = 0.0f;
+    else if (quality >= 100)
+        quality_scale = 1.0f;
+    else
+        quality_scale = quality / 100.0f;
+
     bc6h_params.is_signed = is_signed;
     bc6h_params.mode_mask = mode_mask;
     bc6h_params.exposure = exposure;
-    bc6h_params.quality = quality;
+    bc6h_params.quality = quality_scale;
     bc6h_params.use_pattern = use_pattern;
     bc6h_input_format = input_fmt;
     bc6h_params.max_try = max_try < 0 ? 0 : max_try;

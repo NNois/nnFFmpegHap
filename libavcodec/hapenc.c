@@ -504,7 +504,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
     case HAP_FMT_BPTC_SF: {
         BC6EncContext bc6;
         int is_signed = ctx->opt_tex_fmt == HAP_FMT_BPTC_SF;
-        float quality = ctx->opt_bc6_quality;
+        int quality = ctx->opt_bc6_quality;
         BC6EncInputFormat input_fmt = BC6ENC_INPUT_RGBF16;
 
         if (avctx->pix_fmt == AV_PIX_FMT_RGBA64LE)
@@ -636,7 +636,7 @@ static const AVOption options[] = {
     { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
     { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
     { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
-    { "bc6_quality", "BC6 quality level (Hap H only, 0.0-1.0)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_FLOAT, { .dbl = 1.0 }, 0.0, 1.0, FLAGS },
+    { "bc6_quality", "BC6 quality level (Hap H only, 0-100)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 100 }, 0, 100, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },
