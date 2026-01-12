@@ -33,7 +33,6 @@ typedef struct BC6HEncParams {
     float quality;
     int use_pattern;
     int max_try;
-    int partitions_to_try;
 } BC6HEncParams;
 
 static BC6HEncParams bc6h_params;
@@ -2144,7 +2143,7 @@ static void bc6h_encoder_init(BC6HBlockEncoder *enc)
     enc->m_bAverageEndPoint = 1;
     enc->m_DiffLevel = 0.01f;
     enc->m_maxTry = bc6h_params.max_try;
-    enc->m_partitionsToTry = bc6h_params.partitions_to_try;
+    enc->m_partitionsToTry = MAX_BC6H_PARTITIONS;
 }
 
 //===============================================================================
@@ -3880,13 +3879,12 @@ void ff_bc6enc_init(BC6EncContext *c, int is_signed, uint16_t mode_mask,
                     float exposure, float quality, int use_pattern)
 {
     ff_bc6enc_init_input(c, is_signed, mode_mask, exposure, quality,
-                         use_pattern, BC6ENC_INPUT_RGBF16, 0, 0);
+                         use_pattern, BC6ENC_INPUT_RGBF16, 0);
 }
 
 void ff_bc6enc_init_input(BC6EncContext *c, int is_signed, uint16_t mode_mask,
                           float exposure, float quality, int use_pattern,
-                          BC6EncInputFormat input_fmt, int max_try,
-                          int partitions_to_try)
+                          BC6EncInputFormat input_fmt, int max_try)
 {
     bc6h_params.is_signed = is_signed;
     bc6h_params.mode_mask = mode_mask;
@@ -3895,7 +3893,6 @@ void ff_bc6enc_init_input(BC6EncContext *c, int is_signed, uint16_t mode_mask,
     bc6h_params.use_pattern = use_pattern;
     bc6h_input_format = input_fmt;
     bc6h_params.max_try = max_try < 0 ? 0 : max_try;
-    bc6h_params.partitions_to_try = partitions_to_try < 0 ? 0 : partitions_to_try;
 
     bc6h_init_tables();
     init_ramps();

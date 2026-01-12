@@ -58,15 +58,6 @@ enum HapHeaderLength {
 
 #define HAP_UINT24_MAX 0x00FFFFFF
 
-static float bc6_quality_to_bc6(int level)
-{
-    if (level <= 0)
-        return 0.0f;
-    if (level >= 100)
-        return 1.0f;
-    return level / 100.0f;
-}
-
 static int hap_get_supported_config(const AVCodecContext *avctx,
                                     const AVCodec *codec,
                                     enum AVCodecConfig config,
@@ -513,7 +504,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
     case HAP_FMT_BPTC_SF: {
         BC6EncContext bc6;
         int is_signed = ctx->opt_tex_fmt == HAP_FMT_BPTC_SF;
-        float quality = bc6_quality_to_bc6(ctx->opt_bc6_quality);
+        float quality = ctx->opt_bc6_quality;
         BC6EncInputFormat input_fmt = BC6ENC_INPUT_RGBF16;
 
         if (avctx->pix_fmt == AV_PIX_FMT_RGBA64LE)
@@ -522,8 +513,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
             input_fmt = BC6ENC_INPUT_RGBA64BE;
 
         ff_bc6enc_init_input(&bc6, is_signed, 0xFFFF, 1.0f, quality, 0,
-                             input_fmt, 0,
-                             ctx->opt_bc6_partition_to_try);
+                             input_fmt, 0);
         ctx->enc[0].tex_ratio = 16;
         ctx->enc[0].raw_ratio = input_fmt == BC6ENC_INPUT_RGBF16 ? 24 : 32;
         avctx->codec_tag = MKTAG('H', 'a', 'p', 'H');
@@ -642,12 +632,11 @@ static const AVOption options[] = {
         { "hap_h",     "Hap HDR (BC6U textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC_UF }, 0, 0, FLAGS, .unit = "format" },
         { "hap_hs",    "Hap HDR Signed (BC6S textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC_SF }, 0, 0, FLAGS, .unit = "format" },
         { "hap_alpha", "Hap Alpha (DXT5 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBADXT5  }, 0, 0, FLAGS, .unit = "format" },
-        { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
-        { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
-        { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
+    { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
+    { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
+    { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
     { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
-    { "bc6_quality", "BC6 quality level (Hap H only, 0-100)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 100 }, 0, 100, FLAGS },
-    { "bc6_partition_to_try", "BC6 partitions to try (Hap H only)", OFFSET(opt_bc6_partition_to_try), AV_OPT_TYPE_INT, { .i64 = MAX_BC6H_PARTITIONS }, 0, MAX_BC6H_PARTITIONS, FLAGS },
+    { "bc6_quality", "BC6 quality level (Hap H only, 0.0-1.0)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_FLOAT, { .dbl = 1.0 }, 0.0, 1.0, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },

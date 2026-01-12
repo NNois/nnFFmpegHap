@@ -24,7 +24,6 @@ void ff_bc6enc_init(BC6EncContext *c, int is_signed, uint16_t mode_mask,
                     float exposure, float quality, int use_pattern);
 void ff_bc6enc_init_input(BC6EncContext *c, int is_signed, uint16_t mode_mask,
                           float exposure, float quality, int use_pattern,
-                          BC6EncInputFormat input_fmt, int max_try,
-                          int partitions_to_try);
+                          BC6EncInputFormat input_fmt, int max_try);
 
 #endif /* AVCODEC_BC6ENC_H */
