@@ -70,8 +70,7 @@ typedef struct HapContext {
     int opt_chunk_count; /* User-requested chunk count (encoder only) */
     int opt_compressor; /* User-requested compressor (encoder only) */
     int opt_bc7_quality; /* BC7 encoder quality level (encoder only) */
-    int opt_bc6_quality; /* BC6 encoder quality level (encoder only) */
-    int opt_bc6_partition_to_try; /* BC6 partition limit override (encoder only) */
+    int opt_bc6_quality; /* BC6H GPU preset (0=speed, 1=quality) */
 
     int chunk_count;
     HapChunk *chunks;
@@ -88,6 +87,9 @@ typedef struct HapContext {
 
     uint8_t *tex_buf_alpha;  /* Buffer for alpha texture in HapM encoding */
     size_t tex_size_alpha;   /* Size of alpha texture in HapM encoding */
+
+    uint8_t *bc6h_rgba_f32;  /* Temporary RGBA32F buffer for GPU BC6H */
+    size_t bc6h_rgba_f32_size;
 
     TextureDSPThreadContext enc[2];  /* Encoder contexts for multi-texture */
     TextureDSPThreadContext dec[2];  /* Decoder contexts for multi-texture */

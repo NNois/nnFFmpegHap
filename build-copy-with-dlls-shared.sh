@@ -6,6 +6,7 @@ set -e
 
 FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
 FFMPEG_BIN="$FFMPEG_PREFIX/bin"
+GPURTBC6H_ROOT="${GPURTBC6H_ROOT:-$PWD/thirdparty/GPURealTimeBC6H}"
 
 DEST_DIR="${1:-/c/AD/nnTools/tools/ffmpeg}"
 
@@ -62,6 +63,19 @@ copy_dlls_from_dir_or_ldd() {
 
 # Copy DLLs from the install bin dir (shared build output).
 copy_dlls_from_dir_or_ldd "$FFMPEG_BIN" "$FFMPEG_BIN" "$FFMPEG_BIN/ffprobe.exe" "$FFMPEG_BIN/ffplay.exe"
+
+# Copy GPURealTimeBC6H runtime assets if present.
+if [ -f "$FFMPEG_BIN/GPURealTimeBC6H.dll" ]; then
+    cp -v "$FFMPEG_BIN/GPURealTimeBC6H.dll" "$DEST_DIR/"
+elif [ -f "$GPURTBC6H_ROOT/lib/GPURealTimeBC6H.dll" ]; then
+    cp -v "$GPURTBC6H_ROOT/lib/GPURealTimeBC6H.dll" "$DEST_DIR/"
+fi
+
+if [ -f "$FFMPEG_BIN/compress.hlsl" ]; then
+    cp -v "$FFMPEG_BIN/compress.hlsl" "$DEST_DIR/"
+elif [ -f "$GPURTBC6H_ROOT/lib/compress.hlsl" ]; then
+    cp -v "$GPURTBC6H_ROOT/lib/compress.hlsl" "$DEST_DIR/"
+fi
 
 # Ensure SDL2.dll is included for ffplay (not linked by ffprobe)
 if [ ! -f "$DEST_DIR/SDL2.dll" ]; then

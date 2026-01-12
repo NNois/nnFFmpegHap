@@ -11,6 +11,27 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
 FFMPEG_BIN="$FFMPEG_PREFIX/bin"
+GPURTBC6H_ROOT="${GPURTBC6H_ROOT:-$PWD/thirdparty/GPURealTimeBC6H}"
+GPURTBC6H_CONFIG=""
+GPURTBC6H_CFLAGS=""
+GPURTBC6H_LDFLAGS=""
+GPURTBC6H_INCLUDE=""
+
+if [ -f "$GPURTBC6H_ROOT/include/GPURealTimeBC6H-c.h" ]; then
+    GPURTBC6H_INCLUDE="$GPURTBC6H_ROOT/include"
+elif [ -f "$PWD/GPURealTimeBC6H-c.h" ]; then
+    GPURTBC6H_INCLUDE="$PWD"
+elif [ -f "$GPURTBC6H_ROOT/GPURealTimeBC6H-c.h" ]; then
+    GPURTBC6H_INCLUDE="$GPURTBC6H_ROOT"
+fi
+
+if [ -n "$GPURTBC6H_INCLUDE" ]; then
+    GPURTBC6H_CONFIG="--enable-libgpurealtimebc6h"
+    GPURTBC6H_CFLAGS="-I$GPURTBC6H_INCLUDE"
+    GPURTBC6H_LDFLAGS="-L$GPURTBC6H_ROOT/lib"
+else
+    echo "Note: GPURealTimeBC6H not found at $GPURTBC6H_ROOT; Hap H GPU path disabled."
+fi
 
 echo "=========================================="
 echo "FFmpeg - Alternative Development Edition"
@@ -30,8 +51,8 @@ echo "  - Core: --enable-gpl --enable-version3 --disable-debug"
 echo "  - Link: --enable-shared --disable-static"
 echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libzimg"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame"
-echo "  - HAP: --enable-libsnappy"
-echo "  - CFLAGS: -O3"
+echo "  - HAP: --enable-libsnappy $GPURTBC6H_CONFIG"
+echo "  - CFLAGS: -O3 $GPURTBC6H_CFLAGS"
 echo ""
 
 # Note: Shared build is required so mpv can load custom FFmpeg codecs.
@@ -50,7 +71,9 @@ echo ""
     --enable-libopus \
     --enable-libmp3lame \
     --enable-libzimg \
-    --extra-cflags="-O3"
+    $GPURTBC6H_CONFIG \
+    --extra-cflags="-O3 $GPURTBC6H_CFLAGS" \
+    --extra-ldflags="$GPURTBC6H_LDFLAGS"
 
 echo ""
 echo "Step 3: Verifying HAP is enabled..."
@@ -66,6 +89,20 @@ make -j$CPU_CORES
 echo ""
 echo "Step 5: Installing to $FFMPEG_PREFIX..."
 make install
+
+echo ""
+echo "Step 6: Copying GPURealTimeBC6H runtime assets..."
+GPURTBC6H_LIB_DIR="$GPURTBC6H_ROOT/lib"
+if [ -f "$GPURTBC6H_LIB_DIR/GPURealTimeBC6H.dll" ]; then
+    cp -v "$GPURTBC6H_LIB_DIR/GPURealTimeBC6H.dll" "$FFMPEG_BIN/"
+else
+    echo "Note: GPURealTimeBC6H.dll not found in $GPURTBC6H_LIB_DIR"
+fi
+if [ -f "$GPURTBC6H_LIB_DIR/compress.hlsl" ]; then
+    cp -v "$GPURTBC6H_LIB_DIR/compress.hlsl" "$FFMPEG_BIN/"
+else
+    echo "Note: compress.hlsl not found in $GPURTBC6H_LIB_DIR"
+fi
 
 echo ""
 echo "=========================================="
@@ -86,7 +123,7 @@ echo "Built executables:"
 ls -lh "$FFMPEG_BIN/ffmpeg.exe" "$FFMPEG_BIN/ffplay.exe" "$FFMPEG_BIN/ffprobe.exe" 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
 
 echo ""
-echo "Step 6: Bundling required DLLs..."
+echo "Step 7: Bundling required DLLs..."
 echo ""
 
 # Copy required MINGW64 DLLs to the install bin dir

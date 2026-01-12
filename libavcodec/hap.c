@@ -52,6 +52,8 @@ av_cold void ff_hap_free_context(HapContext *ctx)
 {
     av_freep(&ctx->tex_buf);
     av_freep(&ctx->tex_buf_alpha);
+    av_freep(&ctx->bc6h_rgba_f32);
+    ctx->bc6h_rgba_f32_size = 0;
     av_freep(&ctx->chunks);
     av_freep(&ctx->chunk_results);
 }
