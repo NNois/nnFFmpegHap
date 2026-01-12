@@ -104,6 +104,7 @@ static inline float bc6h_u16_to_float(uint16_t v)
 
 
 #define USE_NEWRAMP
+#define USE_SHAKERHD  // Enable HD endpoint optimization (slower but better quality)
 
 #ifdef USE_NEWRAMP
 static int expandbits_(int bits, int v);
@@ -565,6 +566,8 @@ static float optQuantAnD_d(
 
     int maxTryBase = max_try > 0 ? max_try : MAX_TRY;
     int maxTry = (int)(maxTryBase * quality);
+    // Ensure at least 1 iteration to initialize index properly
+    if (maxTry < 1) maxTry = 1;
     int try_two = 50;
 
     int i, j, k;
@@ -3080,7 +3083,8 @@ static float bc6h_encoder_FindBestPattern(BC6HBlockEncoder *enc,
     // The following code is almost complete - runs very slow and not sure if % of improvement is justified..
 #ifdef USE_SHAKERHD
     // Valid only for 2 region shapes
-    if ((max_subsets > 1) && (enc->m_quality > 0.80))
+    // Always enable for better quality (can be slow, but necessary for good results)
+    if ((max_subsets > 1) && (enc->m_quality > 0.0))
     {
         int tempIndices[MAX_SUBSET_SIZE];
         // int     temp_epo_code[2][2][MAX_DIMENSION_BIG];
