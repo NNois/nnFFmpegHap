@@ -88,8 +88,8 @@ typedef struct HapContext {
     uint8_t *tex_buf_alpha;  /* Buffer for alpha texture in HapM encoding */
     size_t tex_size_alpha;   /* Size of alpha texture in HapM encoding */
 
-    uint8_t *bc6h_rgba_f32;  /* Temporary RGBA32F buffer for GPU BC6H */
-    size_t bc6h_rgba_f32_size;
+    uint8_t *bc6h_rgba_u16;  /* Temporary RGBA64 buffer for ISPC BC6H */
+    size_t bc6h_rgba_u16_size;
 
     TextureDSPThreadContext enc[2];  /* Encoder contexts for multi-texture */
     TextureDSPThreadContext dec[2];  /* Decoder contexts for multi-texture */

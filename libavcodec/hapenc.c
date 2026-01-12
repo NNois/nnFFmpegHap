@@ -31,13 +31,15 @@
 
 #include "config.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "snappy-c.h"
 
 #include "libavutil/frame.h"
-#include "libavutil/half2float.h"
+#include "libavutil/float2half.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/intreadwrite.h"
+#include "libavutil/intfloat.h"
 #include "libavutil/mem.h"
 #include "libavutil/opt.h"
 
@@ -49,8 +51,8 @@
 #include "hap.h"
 #include "texturedsp.h"
 
-#if CONFIG_LIBGPUREALTIMEBC6H
-#include "GPURealTimeBC6H-c.h"
+#if CONFIG_LIBISPC_TEXCOMP
+#include "ispc_texcomp.h"
 #endif
 
 #define HAP_MAX_CHUNKS 64
@@ -98,69 +100,63 @@ static int hap_get_supported_config(const AVCodecContext *avctx,
     return ff_default_get_supported_config(avctx, codec, config, flags, out, out_num);
 }
 
-#if CONFIG_LIBGPUREALTIMEBC6H
-static float hap_bc6h_half_to_float(uint16_t h)
+#if CONFIG_LIBISPC_TEXCOMP
+static uint16_t hap_bc6h_float_to_half(float v)
 {
-    static Half2FloatTables h2f_tables;
-    static int h2f_init;
+    static Float2HalfTables f2h_tables;
+    static int f2h_init;
 
-    if (!h2f_init) {
-        ff_init_half2float_tables(&h2f_tables);
-        h2f_init = 1;
+    if (!f2h_init) {
+        ff_init_float2half_tables(&f2h_tables);
+        f2h_init = 1;
     }
 
-    return av_int2float(half2float(h, &h2f_tables));
+    return float2half(av_float2int(v), &f2h_tables);
 }
 
-static int hap_bc6h_prepare_rgba32f(HapContext *ctx, const AVFrame *frame)
+static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
 {
     const int width = frame->width;
     const int height = frame->height;
-    const size_t needed = (size_t)width * height * 4 * sizeof(float);
-    float *dst;
+    const size_t needed = (size_t)width * height * 4 * sizeof(uint16_t);
+    uint16_t *dst;
     int x, y;
 
-    if (needed > ctx->bc6h_rgba_f32_size) {
-        uint8_t *new_buf = av_realloc(ctx->bc6h_rgba_f32, needed);
+    if (needed > ctx->bc6h_rgba_u16_size) {
+        uint8_t *new_buf = av_realloc(ctx->bc6h_rgba_u16, needed);
         if (!new_buf)
             return AVERROR(ENOMEM);
-        ctx->bc6h_rgba_f32 = new_buf;
-        ctx->bc6h_rgba_f32_size = needed;
+        ctx->bc6h_rgba_u16 = new_buf;
+        ctx->bc6h_rgba_u16_size = needed;
     }
 
-    dst = (float *)ctx->bc6h_rgba_f32;
+    dst = (uint16_t *)ctx->bc6h_rgba_u16;
 
     if (frame->format == AV_PIX_FMT_RGBF16LE ||
         frame->format == AV_PIX_FMT_RGBF16) {
+        const uint16_t alpha = 0x3C00;
         for (y = 0; y < height; y++) {
             const uint8_t *row = frame->data[0] + y * frame->linesize[0];
             for (x = 0; x < width; x++) {
                 const uint8_t *src = row + x * 6;
                 const size_t idx = ((size_t)y * width + x) * 4;
-                uint16_t r = AV_RL16(src);
-                uint16_t g = AV_RL16(src + 2);
-                uint16_t b = AV_RL16(src + 4);
-
-                dst[idx + 0] = hap_bc6h_half_to_float(r);
-                dst[idx + 1] = hap_bc6h_half_to_float(g);
-                dst[idx + 2] = hap_bc6h_half_to_float(b);
-                dst[idx + 3] = 1.0f;
+                dst[idx + 0] = AV_RL16(src);
+                dst[idx + 1] = AV_RL16(src + 2);
+                dst[idx + 2] = AV_RL16(src + 4);
+                dst[idx + 3] = alpha;
             }
         }
     } else if (frame->format == AV_PIX_FMT_RGBF16BE) {
+        const uint16_t alpha = 0x3C00;
         for (y = 0; y < height; y++) {
             const uint8_t *row = frame->data[0] + y * frame->linesize[0];
             for (x = 0; x < width; x++) {
                 const uint8_t *src = row + x * 6;
                 const size_t idx = ((size_t)y * width + x) * 4;
-                uint16_t r = AV_RB16(src);
-                uint16_t g = AV_RB16(src + 2);
-                uint16_t b = AV_RB16(src + 4);
-
-                dst[idx + 0] = hap_bc6h_half_to_float(r);
-                dst[idx + 1] = hap_bc6h_half_to_float(g);
-                dst[idx + 2] = hap_bc6h_half_to_float(b);
-                dst[idx + 3] = 1.0f;
+                dst[idx + 0] = AV_RB16(src);
+                dst[idx + 1] = AV_RB16(src + 2);
+                dst[idx + 2] = AV_RB16(src + 4);
+                dst[idx + 3] = alpha;
             }
         }
     } else if (frame->format == AV_PIX_FMT_RGBA64LE) {
@@ -175,10 +171,10 @@ static int hap_bc6h_prepare_rgba32f(HapContext *ctx, const AVFrame *frame)
                 uint16_t b = AV_RL16(src + 4);
                 uint16_t a = AV_RL16(src + 6);
 
-                dst[idx + 0] = r * scale;
-                dst[idx + 1] = g * scale;
-                dst[idx + 2] = b * scale;
-                dst[idx + 3] = a * scale;
+                dst[idx + 0] = hap_bc6h_float_to_half(r * scale);
+                dst[idx + 1] = hap_bc6h_float_to_half(g * scale);
+                dst[idx + 2] = hap_bc6h_float_to_half(b * scale);
+                dst[idx + 3] = hap_bc6h_float_to_half(a * scale);
             }
         }
     } else if (frame->format == AV_PIX_FMT_RGBA64BE) {
@@ -193,10 +189,10 @@ static int hap_bc6h_prepare_rgba32f(HapContext *ctx, const AVFrame *frame)
                 uint16_t b = AV_RB16(src + 4);
                 uint16_t a = AV_RB16(src + 6);
 
-                dst[idx + 0] = r * scale;
-                dst[idx + 1] = g * scale;
-                dst[idx + 2] = b * scale;
-                dst[idx + 3] = a * scale;
+                dst[idx + 0] = hap_bc6h_float_to_half(r * scale);
+                dst[idx + 1] = hap_bc6h_float_to_half(g * scale);
+                dst[idx + 2] = hap_bc6h_float_to_half(b * scale);
+                dst[idx + 3] = hap_bc6h_float_to_half(a * scale);
             }
         }
     } else {
@@ -206,47 +202,56 @@ static int hap_bc6h_prepare_rgba32f(HapContext *ctx, const AVFrame *frame)
     return 0;
 }
 
-static int hap_bc6h_quality_to_preset(int quality)
+static const char *hap_bc6h_profile_name(int quality)
 {
-    return quality ? GPURealTimeBC6H_Preset_Quality : GPURealTimeBC6H_Preset_Speed;
+    if (quality >= 80)
+        return "veryslow";
+    if (quality >= 60)
+        return "slow";
+    if (quality >= 40)
+        return "basic";
+    if (quality >= 20)
+        return "fast";
+    return "veryfast";
 }
 
-static int hap_bc6h_compress_gpu(AVCodecContext *avctx, uint8_t *out,
-                                 int out_length, const AVFrame *frame)
+static void hap_bc6h_profile_for_quality(int quality, bc6h_enc_settings *settings)
+{
+    if (quality >= 80)
+        GetProfile_bc6h_veryslow(settings);
+    else if (quality >= 60)
+        GetProfile_bc6h_slow(settings);
+    else if (quality >= 40)
+        GetProfile_bc6h_basic(settings);
+    else if (quality >= 20)
+        GetProfile_bc6h_fast(settings);
+    else
+        GetProfile_bc6h_veryfast(settings);
+}
+
+static int hap_bc6h_compress_ispc(AVCodecContext *avctx, uint8_t *out,
+                                  int out_length, const AVFrame *frame)
 {
     HapContext *ctx = avctx->priv_data;
-    GPURealTimeBC6H_Image src_image;
-    GPURealTimeBC6H_Image dst_image;
+    bc6h_enc_settings settings;
+    rgba_surface src;
     int ret;
 
     if (ctx->tex_size > out_length)
         return AVERROR_BUFFER_TOO_SMALL;
 
-    ret = hap_bc6h_prepare_rgba32f(ctx, frame);
+    ret = hap_bc6h_prepare_rgba64(ctx, frame);
     if (ret < 0)
         return ret;
 
-    src_image.width = avctx->width;
-    src_image.height = avctx->height;
-    src_image.data = ctx->bc6h_rgba_f32;
-    src_image.dataSize = (size_t)avctx->width * avctx->height * 4 * sizeof(float);
+    hap_bc6h_profile_for_quality(ctx->opt_bc6_quality, &settings);
 
-    if (!GPURealTimeBC6H_Compress(&src_image, GPURealTimeBC6H_ImageFormat_RGBA32F,
-                                  &dst_image)) {
-        av_log(avctx, AV_LOG_ERROR, "GPURealTimeBC6H_Compress failed\n");
-        return AVERROR_BUG;
-    }
+    src.ptr = ctx->bc6h_rgba_u16;
+    src.width = avctx->width;
+    src.height = avctx->height;
+    src.stride = avctx->width * 4 * sizeof(uint16_t);
 
-    if (dst_image.dataSize < (size_t)ctx->tex_size) {
-        av_log(avctx, AV_LOG_ERROR,
-               "GPURealTimeBC6H output too small (%zu < %zu)\n",
-               dst_image.dataSize, (size_t)ctx->tex_size);
-        GPURealTimeBC6H_FreeImage(&dst_image);
-        return AVERROR_BUG;
-    }
-
-    memcpy(out, dst_image.data, ctx->tex_size);
-    GPURealTimeBC6H_FreeImage(&dst_image);
+    CompressBlocksBC6H(&src, out, &settings);
 
     return 0;
 }
@@ -285,14 +290,14 @@ static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length,
         ctx->tex_size_alpha = tex_size_alpha;
     } else {
         /* Single texture encoding */
-#if CONFIG_LIBGPUREALTIMEBC6H
+#if CONFIG_LIBISPC_TEXCOMP
         if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
-            return hap_bc6h_compress_gpu(avctx, out, out_length, f);
+            return hap_bc6h_compress_ispc(avctx, out, out_length, f);
         }
 #else
         if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
             av_log(avctx, AV_LOG_ERROR,
-                   "Hap H requires --enable-libgpurealtimebc6h.\n");
+                   "Hap H requires --enable-libispc_texcomp.\n");
             return AVERROR(ENOSYS);
         }
 #endif
@@ -673,16 +678,9 @@ static av_cold int hap_init(AVCodecContext *avctx)
         break;
     }
     case HAP_FMT_BPTC_UF: {
-#if CONFIG_LIBGPUREALTIMEBC6H
-        int preset;
-
-        preset = hap_bc6h_quality_to_preset(ctx->opt_bc6_quality);
-        if (preset == GPURealTimeBC6H_Preset_Speed)
-            av_log(avctx, AV_LOG_INFO, "Hap H preset: speed\n");
-        else
-            av_log(avctx, AV_LOG_INFO, "Hap H preset: quality\n");
-
-        GPURealTimeBC6H_Initialize(preset);
+#if CONFIG_LIBISPC_TEXCOMP
+        av_log(avctx, AV_LOG_INFO, "Hap H profile: %s\n",
+               hap_bc6h_profile_name(ctx->opt_bc6_quality));
 
         ctx->enc[0].tex_ratio = 16;
         ctx->enc[0].raw_ratio = (avctx->pix_fmt == AV_PIX_FMT_RGBF16 ||
@@ -694,7 +692,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
         break;
 #else
         av_log(avctx, AV_LOG_ERROR,
-               "Hap H requires --enable-libgpurealtimebc6h.\n");
+               "Hap H requires --enable-libispc_texcomp.\n");
         return AVERROR(ENOSYS);
 #endif
     }
@@ -795,11 +793,6 @@ static av_cold int hap_close(AVCodecContext *avctx)
 {
     HapContext *ctx = avctx->priv_data;
 
-#if CONFIG_LIBGPUREALTIMEBC6H
-    if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF)
-        GPURealTimeBC6H_Release();
-#endif
-
     ff_hap_free_context(ctx);
 
     return 0;
@@ -817,7 +810,7 @@ static const AVOption options[] = {
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
     { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
-    { "bc6_quality", "BC6H GPU preset (Hap H only, 0=speed, 1=quality)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 1 }, 0, 1, FLAGS },
+    { "bc6_quality", "BC6 quality level (Hap H only, 0-100)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 100 }, 0, 100, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },

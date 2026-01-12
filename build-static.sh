@@ -15,26 +15,17 @@ echo "Rebuilding with STATIC linking (portable)"
 echo "=========================================="
 echo ""
 
-GPURTBC6H_ROOT="${GPURTBC6H_ROOT:-$PWD/thirdparty/GPURealTimeBC6H}"
-GPURTBC6H_CONFIG=""
-GPURTBC6H_CFLAGS=""
-GPURTBC6H_LDFLAGS=""
-GPURTBC6H_INCLUDE=""
+ISPCTEXCOMP_ROOT="${ISPCTEXCOMP_ROOT:-$PWD/thirdparty/ISPCTextureCompressor}"
+ISPCTEXCOMP_CONFIG=""
+ISPCTEXCOMP_CFLAGS=""
+ISPCTEXCOMP_LDFLAGS=""
 
-if [ -f "$GPURTBC6H_ROOT/include/GPURealTimeBC6H-c.h" ]; then
-    GPURTBC6H_INCLUDE="$GPURTBC6H_ROOT/include"
-elif [ -f "$PWD/GPURealTimeBC6H-c.h" ]; then
-    GPURTBC6H_INCLUDE="$PWD"
-elif [ -f "$GPURTBC6H_ROOT/GPURealTimeBC6H-c.h" ]; then
-    GPURTBC6H_INCLUDE="$GPURTBC6H_ROOT"
-fi
-
-if [ -n "$GPURTBC6H_INCLUDE" ]; then
-    GPURTBC6H_CONFIG="--enable-libgpurealtimebc6h"
-    GPURTBC6H_CFLAGS="-I$GPURTBC6H_INCLUDE"
-    GPURTBC6H_LDFLAGS="-L$GPURTBC6H_ROOT/lib"
+if [ -f "$ISPCTEXCOMP_ROOT/ispc_texcomp/ispc_texcomp.h" ]; then
+    ISPCTEXCOMP_CONFIG="--enable-libispc_texcomp"
+    ISPCTEXCOMP_CFLAGS="-I$ISPCTEXCOMP_ROOT/ispc_texcomp"
+    ISPCTEXCOMP_LDFLAGS="-L$ISPCTEXCOMP_ROOT/lib"
 else
-    echo "Note: GPURealTimeBC6H not found at $GPURTBC6H_ROOT; Hap H GPU path disabled."
+    echo "Note: ISPCTextureCompressor not found at $ISPCTEXCOMP_ROOT; Hap H ISPC path disabled."
 fi
 
 echo "Step 1: Cleaning previous build..."
@@ -49,8 +40,8 @@ echo "  - Core: --enable-gpl --enable-version3 --disable-debug"
 echo "  - Link: --enable-static --disable-shared"
 echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libzimg"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame"
-echo "  - HAP: --enable-libsnappy $GPURTBC6H_CONFIG"
-echo "  - CFLAGS: -O3 $GPURTBC6H_CFLAGS"
+echo "  - HAP: --enable-libsnappy $ISPCTEXCOMP_CONFIG"
+echo "  - CFLAGS: -O3 $ISPCTEXCOMP_CFLAGS"
 echo ""
 
 # Note: Full static linking is not possible with MINGW64
@@ -70,9 +61,9 @@ echo ""
     --enable-libopus \
     --enable-libmp3lame \
     --enable-libzimg \
-    $GPURTBC6H_CONFIG \
-    --extra-cflags="-O3 $GPURTBC6H_CFLAGS" \
-    --extra-ldflags="$GPURTBC6H_LDFLAGS"
+    $ISPCTEXCOMP_CONFIG \
+    --extra-cflags="-O3 $ISPCTEXCOMP_CFLAGS" \
+    --extra-ldflags="$ISPCTEXCOMP_LDFLAGS"
 
 echo ""
 echo "Step 3: Verifying HAP is enabled..."
@@ -104,17 +95,12 @@ echo "Built executables:"
 ls -lh ffmpeg.exe ffplay.exe ffprobe.exe 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
 
 echo ""
-echo "Step 5: Copying GPURealTimeBC6H runtime assets..."
-GPURTBC6H_LIB_DIR="$GPURTBC6H_ROOT/lib"
-if [ -f "$GPURTBC6H_LIB_DIR/GPURealTimeBC6H.dll" ]; then
-    cp -v "$GPURTBC6H_LIB_DIR/GPURealTimeBC6H.dll" ./
+echo "Step 5: Copying ISPCTextureCompressor runtime assets..."
+ISPCTEXCOMP_LIB_DIR="$ISPCTEXCOMP_ROOT/lib"
+if [ -f "$ISPCTEXCOMP_LIB_DIR/ispc_texcomp.dll" ]; then
+    cp -v "$ISPCTEXCOMP_LIB_DIR/ispc_texcomp.dll" ./
 else
-    echo "Note: GPURealTimeBC6H.dll not found in $GPURTBC6H_LIB_DIR"
-fi
-if [ -f "$GPURTBC6H_LIB_DIR/compress.hlsl" ]; then
-    cp -v "$GPURTBC6H_LIB_DIR/compress.hlsl" ./
-else
-    echo "Note: compress.hlsl not found in $GPURTBC6H_LIB_DIR"
+    echo "Note: ispc_texcomp.dll not found in $ISPCTEXCOMP_LIB_DIR"
 fi
 
 echo ""
