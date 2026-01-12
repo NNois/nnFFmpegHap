@@ -15,6 +15,7 @@
 #include "libavutil/attributes.h"
 #include "libavutil/float2half.h"
 #include "libavutil/half2float.h"
+#include "libavutil/intreadwrite.h"
 #include "libavutil/intfloat.h"
 
 #include "bc6h_common.h"
@@ -31,12 +32,15 @@ typedef struct BC6HEncParams {
     int is_signed;
     float quality;
     int use_pattern;
+    int max_try;
+    int partitions_to_try;
 } BC6HEncParams;
 
 static BC6HEncParams bc6h_params;
 static Float2HalfTables bc6h_f2h;
 static Half2FloatTables bc6h_h2f;
 static int bc6h_tables_init;
+static BC6EncInputFormat bc6h_input_format = BC6ENC_INPUT_RGBF16;
 
 static void bc6h_init_tables(void)
 {
@@ -55,6 +59,11 @@ static inline uint16_t bc6h_float_to_half(float v)
 static inline float bc6h_half_to_float(uint16_t h)
 {
     return av_int2float(half2float(h, &bc6h_h2f));
+}
+
+static inline float bc6h_u16_to_float(uint16_t v)
+{
+    return v * (1.0f / 65535.0f);
 }
 
 //===============================================================================
@@ -97,6 +106,17 @@ static inline float bc6h_half_to_float(uint16_t h)
 
 #define USE_NEWRAMP
 
+#ifdef USE_NEWRAMP
+static int expandbits_(int bits, int v);
+static float ep_df(int bits, int p1);
+static float rampf(int clog, int bits, int p1, int p2, int i);
+#endif
+
+#ifdef USE_RAMPS
+static int spidx(int in_data, int in_clog, int in_bits, int in_p2, int in_o1, int in_o2, int in_i);
+static float sperr(int in_data, int clog, int bits, int p2, int o1, int o2);
+#endif
+
 #ifdef USE_RAMPS
 
 static int g_init_ramps = 0;
@@ -106,7 +126,7 @@ static int g_init_ramps = 0;
 
 //==============================================================================================
 // return # of bits needed to store n. handle signed or unsigned cases properly
-static int NBits(int n, bool bIsSigned) {
+static av_unused int NBits(int n, bool bIsSigned) {
     int nb;
     if (n == 0) {
         return 0; // no bits needed for 0, signed or not
@@ -120,11 +140,11 @@ static int NBits(int n, bool bIsSigned) {
     }
 }
 
-float lerpf(float a, float b, int i, int denom) {
+static float lerpf(float a, float b, int i, int denom) {
     assert(denom == 3 || denom == 7 || denom == 15);
     assert(i >= 0 && i <= denom);
 
-    int *weights = NULL;
+    const int *weights = NULL;
 
     switch (denom) {
     case 3:
@@ -142,8 +162,8 @@ float lerpf(float a, float b, int i, int denom) {
     return (a*weights[denom - i] + b*weights[i]) / 64.0f;
 }
 
-int QuantizeToInt(short value, int prec, bool signedfloat16, float exposure) {
-    (exposure);
+static int QuantizeToInt(short value, int prec, bool signedfloat16, float exposure) {
+    (void)exposure;
 
     if (prec <= 1) return 0;
     bool negvalue = false;
@@ -172,7 +192,7 @@ int QuantizeToInt(short value, int prec, bool signedfloat16, float exposure) {
     return (negvalue ? -iQuantized : iQuantized);
 }
 
-int Unquantize(int comp, unsigned char uBitsPerComp, bool bSigned) {
+static int Unquantize(int comp, unsigned char uBitsPerComp, bool bSigned) {
     int unq = 0, s = 0;
     if (bSigned) {
         if (uBitsPerComp >= 16) {
@@ -201,7 +221,7 @@ int Unquantize(int comp, unsigned char uBitsPerComp, bool bSigned) {
 
 //==============================================================================================
 
-void    Partition(
+static void Partition(
     int       shape,
     float    in[][MAX_DIMENSION_BIG],
     float    subsets[MAX_SUBSETS][MAX_SUBSET_SIZE][MAX_DIMENSION_BIG],
@@ -209,7 +229,7 @@ void    Partition(
     int       ShapeTableToUse,
     int       dimension) {
     int   i, j;
-    int   *table = NULL;
+    const int *table = NULL;
 
     // Dont use memset: this is better for now
     for (i = 0; i<MAX_SUBSETS; i++) count[i] = 0;
@@ -243,7 +263,7 @@ void    Partition(
 
 //=================================================================================================
 
-void GetEndPoints(float EndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG], float outB[MAX_SUBSETS][MAX_SUBSET_SIZE][MAX_DIMENSION_BIG], int max_subsets, int entryCount[MAX_SUBSETS]) {
+static void GetEndPoints(float EndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG], float outB[MAX_SUBSETS][MAX_SUBSET_SIZE][MAX_DIMENSION_BIG], int max_subsets, int entryCount[MAX_SUBSETS]) {
     // Should have some sort of error notification!
     if (max_subsets > MAX_SUBSETS) return;
 
@@ -282,7 +302,7 @@ void GetEndPoints(float EndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG
     }
 }
 
-void covariance_d(float data[][MAX_DIMENSION_BIG], int numEntries, float cov[MAX_DIMENSION_BIG][MAX_DIMENSION_BIG], int dimension) {
+static void covariance_d(float data[][MAX_DIMENSION_BIG], int numEntries, float cov[MAX_DIMENSION_BIG][MAX_DIMENSION_BIG], int dimension) {
     int i, j, k;
 
     for (i = 0; i<dimension; i++)
@@ -297,7 +317,7 @@ void covariance_d(float data[][MAX_DIMENSION_BIG], int numEntries, float cov[MAX
             cov[i][j] = cov[j][i];
 }
 
-void centerInPlace_d(float data[][MAX_DIMENSION_BIG], int numEntries, float mean[MAX_DIMENSION_BIG], int dimension) {
+static void centerInPlace_d(float data[][MAX_DIMENSION_BIG], int numEntries, float mean[MAX_DIMENSION_BIG], int dimension) {
     int i, k;
 
     for (i = 0; i<dimension; i++) {
@@ -316,7 +336,7 @@ void centerInPlace_d(float data[][MAX_DIMENSION_BIG], int numEntries, float mean
     }
 }
 
-void eigenVector_d(float cov[MAX_DIMENSION_BIG][MAX_DIMENSION_BIG], float vector[MAX_DIMENSION_BIG], int dimension) {
+static void eigenVector_d(float cov[MAX_DIMENSION_BIG][MAX_DIMENSION_BIG], float vector[MAX_DIMENSION_BIG], int dimension) {
     // calculate an eigenvecto corresponding to a biggest eigenvalue
     // will work for non-zero non-negative matricies only
 
@@ -397,7 +417,7 @@ void eigenVector_d(float cov[MAX_DIMENSION_BIG][MAX_DIMENSION_BIG], float vector
         vector[i] /= t;
 }
 
-void project_d(float data[][MAX_DIMENSION_BIG], int numEntries, float vector[MAX_DIMENSION_BIG], float projection[MAX_ENTRIES], int dimension) {
+static void project_d(float data[][MAX_DIMENSION_BIG], int numEntries, float vector[MAX_DIMENSION_BIG], float projection[MAX_ENTRIES], int dimension) {
     // assume that vector is normalized already
     int i, k;
 
@@ -414,26 +434,28 @@ typedef struct {
     int i;
 } a;
 
-inline int a_compare(const void *arg1, const void *arg2) {
-    if (((a*)arg1)->d - ((a*)arg2)->d > 0) return 1;
-    if (((a*)arg1)->d - ((a*)arg2)->d < 0) return -1;
+static inline int a_compare(const void *arg1, const void *arg2) {
+    const a *v1 = arg1;
+    const a *v2 = arg2;
+    if (v1->d - v2->d > 0) return 1;
+    if (v1->d - v2->d < 0) return -1;
     return 0;
 };
 
-void sortProjection(float projection[MAX_ENTRIES], int order[MAX_ENTRIES], int numEntries) {
+static void sortProjection(float projection[MAX_ENTRIES], int order[MAX_ENTRIES], int numEntries) {
     int i;
     a what[MAX_ENTRIES + MAX_PARTITIONS_TABLE];
 
     for (i = 0; i < numEntries; i++)
         what[what[i].i = i].d = projection[i];
 
-    qsort((void*)&what, numEntries, sizeof(a), a_compare);
+    qsort(what, numEntries, sizeof(what[0]), a_compare);
 
     for (i = 0; i < numEntries; i++)
         order[i] = what[i].i;
 };
 
-float totalError_d(float data[MAX_ENTRIES][MAX_DIMENSION_BIG], float data2[MAX_ENTRIES][MAX_DIMENSION_BIG], int numEntries, int dimension) {
+static float totalError_d(float data[MAX_ENTRIES][MAX_DIMENSION_BIG], float data2[MAX_ENTRIES][MAX_DIMENSION_BIG], int numEntries, int dimension) {
     int i, j;
     float t = 0;
     for (i = 0; i<numEntries; i++)
@@ -452,7 +474,7 @@ float totalError_d(float data[MAX_ENTRIES][MAX_DIMENSION_BIG], float data2[MAX_E
 // output:
 // index, uncentered, in the range 0..k-1
 //
-void quant_AnD_Shell(float* v_, int k, int n, int *idx) {
+static void quant_AnD_Shell(float* v_, int k, int n, int *idx) {
 #define MAX_BLOCK MAX_ENTRIES
     int i, j;
     float v[MAX_BLOCK];
@@ -515,7 +537,7 @@ void quant_AnD_Shell(float* v_, int k, int n, int *idx) {
         }
 
         // position which should be in 0
-        j = ++j % n;
+        j = (j + 1) % n;
 
         for (i = j; i < n; i++)
             idx[d[i].i]++;
@@ -529,7 +551,7 @@ void quant_AnD_Shell(float* v_, int k, int n, int *idx) {
         idx[i] -= mi;
 }
 
-float optQuantAnD_d(
+static float optQuantAnD_d(
     float data[MAX_ENTRIES][MAX_DIMENSION_BIG],
     int numEntries,
     int numClusters,
@@ -537,12 +559,17 @@ float optQuantAnD_d(
     float out[MAX_ENTRIES][MAX_DIMENSION_BIG],
     float direction[MAX_DIMENSION_BIG], float *step,
     int dimension,
-    float quality
+    float quality,
+    int max_try
 ) {
     int index_[MAX_ENTRIES];
 
-    int maxTry = (int)(MAX_TRY * quality);
+    int maxTryBase = max_try > 0 ? max_try : MAX_TRY;
+    int maxTry = (int)(maxTryBase * quality);
     int try_two = 50;
+
+    if (maxTry < 1)
+        maxTry = 1;
 
     int i, j, k;
     float t, s;
@@ -703,7 +730,7 @@ float optQuantAnD_d(
 #define BTT(bits)           (bits-BIT_BASE)
 #define CLT(cl)             (cl-LOG_CL_BASE)
 
-const float rampLerpWeights[5][16] = {
+static const float rampLerpWeights[5][16] = {
     { 0.0 }, // 0 bit index
     { 0.0, 1.0 }, // 1 bit index
     { 0.0, 21.0 / 64.0, 43.0 / 64.0, 1.0 }, // 2 bit index
@@ -716,12 +743,12 @@ const float rampLerpWeights[5][16] = {
 
 static float rampf_linear(int clog, int bits, float p1, float p2, int indexPos)
 {
-    (bits);
+    (void)bits;
     // (clog+ LOG_CL_BASE) starts from 2 to 4
     return  (float)p1 + rampLerpWeights[clog + LOG_CL_BASE][indexPos] * (p2 - p1);
 }
 
-int all_same_d(float d[][MAX_DIMENSION_BIG], int n, int dimension) {
+static int all_same_d(float d[][MAX_DIMENSION_BIG], int n, int dimension) {
     int i, j;
     int same = 1;
     for (i = 1; i< n; i++)
@@ -732,14 +759,14 @@ int all_same_d(float d[][MAX_DIMENSION_BIG], int n, int dimension) {
 }
 
 // return the max index from a set of indexes
-int max_index(int a[], int n) {
+static int max_index(int a[], int n) {
     int i, m = a[0];
     for (i = 0; i< n; i++)
         m = m > a[i] ? m : a[i];
     return (m);
 }
 
-int cluster_mean_d_d(float d[MAX_ENTRIES][MAX_DIMENSION_BIG], float mean[MAX_ENTRIES][MAX_DIMENSION_BIG], int index[], int i_comp[], int i_cnt[], int n, int dimension) {
+static int cluster_mean_d_d(float d[MAX_ENTRIES][MAX_DIMENSION_BIG], float mean[MAX_ENTRIES][MAX_DIMENSION_BIG], int index[], int i_comp[], int i_cnt[], int n, int dimension) {
     // unused index values are underfined
     int i, j, k;
     //assert(n!=0);
@@ -765,7 +792,7 @@ int cluster_mean_d_d(float d[MAX_ENTRIES][MAX_DIMENSION_BIG], float mean[MAX_ENT
     return k;
 }
 
-void mean_d_d(float d[][MAX_DIMENSION_BIG], float mean[MAX_DIMENSION_BIG], int n, int dimension) {
+static void mean_d_d(float d[][MAX_DIMENSION_BIG], float mean[MAX_DIMENSION_BIG], int n, int dimension) {
     int i, j;
     for (j = 0; j< dimension; j++)
         mean[j] = 0;
@@ -776,7 +803,7 @@ void mean_d_d(float d[][MAX_DIMENSION_BIG], float mean[MAX_DIMENSION_BIG], int n
         mean[j] /= (float)n;
 }
 
-void index_collapse_kernel(int index[], int numEntries) {
+static void index_collapse_kernel(int index[], int numEntries) {
     int k;
     int d, D;
     int mi;
@@ -806,19 +833,19 @@ void index_collapse_kernel(int index[], int numEntries) {
 //========================================================================================================================
 //-------------------------------------------------------------------------------------------------------------------------
 
-int max_i(int a[], int n) {
+static int max_i(int a[], int n) {
     int i, m = a[0];
     for (i = 0; i< n; i++)
         m = m > a[i] ? m : a[i];
     return (m);
 }
 
-int npv_nd[2][2 * MAX_DIMENSION_BIG] = {
+static const int npv_nd[2][2 * MAX_DIMENSION_BIG] = {
     { 1,2,4,8,16,32,0,0 }, //dimension = 3
     { 1,2,4,0,0,0,0,0 }    //dimension = 4
 };
 
-short par_vectors_nd[2][8][128][2][MAX_DIMENSION_BIG] = {
+static const short par_vectors_nd[2][8][128][2][MAX_DIMENSION_BIG] = {
     {
         // Dimension = 3
         {
@@ -987,13 +1014,13 @@ short par_vectors_nd[2][8][128][2][MAX_DIMENSION_BIG] = {
 
 };
 
-int get_par_vector(int dim1, int dim2, int dim3, int dim4, int dim5) {
+static int get_par_vector(int dim1, int dim2, int dim3, int dim4, int dim5) {
     return par_vectors_nd[dim1][dim2][dim3][dim4][dim5];
 }
 
 
 
-float quant_single_point_d
+static float quant_single_point_d
 (
     float data[MAX_ENTRIES][MAX_DIMENSION_BIG],
     int numEntries, int index[MAX_ENTRIES],
@@ -1178,20 +1205,20 @@ float quant_single_point_d
 
 #define SP_ERRIDX_MAX 256
 
-int expandbits_(int bits, int v) {
+static int expandbits_(int bits, int v) {
     return (v << (8 - bits) | v >> (2 * bits - 8));
 }
 
 
 #ifndef USE_NEWRAMP
-float    ep_d[4][SP_ERRIDX_MAX];
-float    ramp[3][4][SP_ERRIDX_MAX][SP_ERRIDX_MAX][16];
+static float ep_d[4][SP_ERRIDX_MAX];
+static float ramp[3][4][SP_ERRIDX_MAX][SP_ERRIDX_MAX][16];
 #else
-float ep_df(int bits, int p1) {
+static float ep_df(int bits, int p1) {
     return (float)expandbits_(bits + BIT_BASE, p1);
 }
 
-float rampf(int clog, int bits, int p1, int p2, int i) {
+static float rampf(int clog, int bits, int p1, int p2, int i) {
     // (clog+ LOG_CL_BASE) starts from 2 to 4
     float ret = floorf((float)ep_df(bits, p1) + rampLerpWeights[clog + LOG_CL_BASE][i] * (float)((ep_df(bits, p2) - ep_df(bits, p1))) + 0.5F);
     if (ret > SP_ERRIDX_MAX) return SP_ERRIDX_MAX - 1;
@@ -1201,16 +1228,16 @@ float rampf(int clog, int bits, int p1, int p2, int i) {
 
 #ifdef USE_RAMPS
 
-int spidx(int in_data, int in_clog, int in_bits, int in_p2, int in_o1, int in_o2, int in_i) {
+static int spidx(int in_data, int in_clog, int in_bits, int in_p2, int in_o1, int in_o2, int in_i) {
     return sp_data[in_data].sp_idx[in_clog][in_bits][in_p2][in_o1][in_o2][in_i];
 }
 
-float sperr(int in_data, int clog, int bits, int p2, int o1, int o2) {
+static float sperr(int in_data, int clog, int bits, int p2, int o1, int o2) {
     return sp_data[in_data].sp_err[clog][bits][p2][o1][o2];
 }
 #endif
 
-void init_ramps() {
+static void init_ramps(void) {
 #ifdef USE_RAMPS
     int clog, bits;
     int in_data; // p1;
@@ -1328,14 +1355,14 @@ void init_ramps() {
 #endif
 }
 
-void deinit_ramps() {
+static av_unused void deinit_ramps(void) {
 #ifdef USE_RAMPS
     if (g_init_ramps > 1)
         g_init_ramps--;
 #endif
 }
 
-int ep_find_floor(float v, int bits, int use_par, int odd) {
+static int ep_find_floor(float v, int bits, int use_par, int odd) {
 #ifndef USE_NEWRAMP
     float *p = ep_d[BTT(bits)];
 #endif
@@ -1359,7 +1386,7 @@ int ep_find_floor(float v, int bits, int use_par, int odd) {
 
 
 //based on code : ep_shaker_d in BC7 shaker
-float ep_shaker_HD(
+static float ep_shaker_HD(
     float data[MAX_ENTRIES][MAX_DIMENSION_BIG],
     int numEntries,
     int index_[MAX_ENTRIES],
@@ -1665,7 +1692,7 @@ float ep_shaker_HD(
     return err_o;
 }
 
-float ep_shaker_2_d(
+static av_unused float ep_shaker_2_d(
     float data[MAX_ENTRIES][MAX_DIMENSION_BIG],
     int numEntries,
     int index_[MAX_ENTRIES],
@@ -2103,6 +2130,8 @@ typedef struct BC6HBlockEncoder {
     int m_bAverageEndPoint;
     float m_DiffLevel;
     int m_useMonoShapePatterns;
+    int m_maxTry;
+    int m_partitionsToTry;
 } BC6HBlockEncoder;
 
 static void bc6h_encoder_init(BC6HBlockEncoder *enc)
@@ -2114,6 +2143,8 @@ static void bc6h_encoder_init(BC6HBlockEncoder *enc)
     enc->m_Exposure = bc6h_params.exposure;
     enc->m_bAverageEndPoint = 1;
     enc->m_DiffLevel = 0.01f;
+    enc->m_maxTry = bc6h_params.max_try;
+    enc->m_partitionsToTry = bc6h_params.partitions_to_try;
 }
 
 //===============================================================================
@@ -2166,7 +2197,7 @@ static void bc6h_encoder_init(BC6HBlockEncoder *enc)
 
 #ifdef DEBUG_PATTERNS
 // random pixel noise range
-float bc6h_encoder_DoPixelNoise()
+static float bc6h_encoder_DoPixelNoise(void)
 {
     float ret = (rand() % RANDOM_NOISE_LEVEL) / 100.0;
     return (ret);
@@ -2623,7 +2654,7 @@ static void bc6h_encoder_QuantizeEndPointToF16Prec(const BC6HBlockEncoder *enc,
     so that indices at fix up points have higher order bit set to 0
 ==================================================================*/
 
-void bc6h_encoder_SwapIndices(int iEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
+static void bc6h_encoder_SwapIndices(int iEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                                    int iIndices[3][BC6H_MAX_SUBSET_SIZE],
                                    int entryCount[BC6H_MAX_SUBSETS],
                                    int max_subsets,
@@ -2657,7 +2688,7 @@ void bc6h_encoder_SwapIndices(int iEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DI
     Tranforms according to shape precission
 ==================================================================*/
 // helper function to check transform overflow
-bool isOverflow(int endpoint, int nbit, bool bIsSigned)
+static bool isOverflow(int endpoint, int nbit, bool bIsSigned)
 {
     if (bIsSigned)
     {
@@ -2703,7 +2734,7 @@ bool isOverflow(int endpoint, int nbit, bool bIsSigned)
 }
 
 // Bug in this code : Need to add signed bit to values
-bool bc6h_encoder_TransformEndPoints(AMD_BC6H_Format * BC6H_data,
+static bool bc6h_encoder_TransformEndPoints(AMD_BC6H_Format * BC6H_data,
                                           int              iEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                                           int              oEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                                           int              max_subsets,
@@ -2778,7 +2809,7 @@ bool bc6h_encoder_TransformEndPoints(AMD_BC6H_Format * BC6H_data,
     return true;
 }
 
-void bc6h_encoder_SaveCompressedBlockData(AMD_BC6H_Format * BC6H_data,
+static void bc6h_encoder_SaveCompressedBlockData(AMD_BC6H_Format * BC6H_data,
                                                int              oEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                                                int              iIndices[2][BC6H_MAX_SUBSET_SIZE],
                                                int              max_subsets,
@@ -2820,7 +2851,7 @@ void bc6h_encoder_SaveCompressedBlockData(AMD_BC6H_Format * BC6H_data,
     }
 }
 
-void palitizeEndPointsF(AMD_BC6H_Format * BC6H_data, float fEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG])
+static void palitizeEndPointsF(AMD_BC6H_Format * BC6H_data, float fEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG])
 {
     // scale endpoints
     float Ar, Ag, Ab, Br, Bg, Bb;
@@ -2868,7 +2899,7 @@ void palitizeEndPointsF(AMD_BC6H_Format * BC6H_data, float fEndPoints[MAX_SUBSET
     }
 }
 
-float CalcOneRegionEndPtsError(AMD_BC6H_Format * BC6H_data,
+static float CalcOneRegionEndPtsError(AMD_BC6H_Format * BC6H_data,
                                float            fEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                                int              shape_indices[MAX_SUBSETS][MAX_SUBSET_SIZE])
 {
@@ -2889,7 +2920,7 @@ float CalcOneRegionEndPtsError(AMD_BC6H_Format * BC6H_data,
     return error;
 }
 
-float CalcShapeError(AMD_BC6H_Format * BC6H_data, float fEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG], bool SkipPallet)
+static float CalcShapeError(AMD_BC6H_Format * BC6H_data, float fEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG], bool SkipPallet)
 {
     int   maxPallet;
     int   subset     = 0;
@@ -2940,7 +2971,7 @@ float CalcShapeError(AMD_BC6H_Format * BC6H_data, float fEndPoints[MAX_SUBSETS][
     return totalError;
 }
 
-void ReIndexShapef(AMD_BC6H_Format * BC6H_data, int shape_indices[BC6H_MAX_SUBSETS][MAX_SUBSET_SIZE])
+static void ReIndexShapef(AMD_BC6H_Format * BC6H_data, int shape_indices[BC6H_MAX_SUBSETS][MAX_SUBSET_SIZE])
 {
     float error = 0;
     float bestError;
@@ -3048,9 +3079,8 @@ static float bc6h_encoder_FindBestPattern(BC6HBlockEncoder *enc,
                                   direction,                     // direction vector of the ramp (check normalization)
                                   &step,                         // step size (check normalization)
                                   3,                             // number of channels (always 3 = RGB for BC6H)
-                                  enc->m_quality                      // Quality set number of retry to get good end points
-                                                                 // Max retries = MAX_TRY = 4000 when Quality is 1.0
-                                                                 // Min = 0 and default with quality 0.05 is 200 times
+                                  enc->m_quality,               // Quality scale (0..1)
+                                  enc->m_maxTry                 // Max retries override (0 = default)
         );
     }
 
@@ -3134,7 +3164,7 @@ static float bc6h_encoder_FindBestPattern(BC6HBlockEncoder *enc,
     return BestError_endpts;
 }
 
-int finish_unquantizeF16(int q, bool isSigned)
+static int finish_unquantizeF16(int q, bool isSigned)
 {
     // Is it F16 Signed else F16 Unsigned
     if (isSigned)
@@ -3145,7 +3175,7 @@ int finish_unquantizeF16(int q, bool isSigned)
     // Note for Undefined we should return q as is
 }
 
-void decompress_endpoints1(AMD_BC6H_Format * bc6h_format,
+static void decompress_endpoints1(AMD_BC6H_Format * bc6h_format,
                            int              oEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                            float            outf[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                            int              mode)
@@ -3230,7 +3260,7 @@ void decompress_endpoints1(AMD_BC6H_Format * bc6h_format,
     }
 }
 
-void decompress_endpoints2(AMD_BC6H_Format * bc6h_format,
+static void decompress_endpoints2(AMD_BC6H_Format * bc6h_format,
                            int              oEndPoints[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                            float            outf[MAX_SUBSETS][MAX_END_POINTS][MAX_DIMENSION_BIG],
                            int              mode)
@@ -3598,7 +3628,7 @@ static float bc6h_encoder_EncodePattern(BC6HBlockEncoder *enc,
 
 //#define DEBUG_A_BLOCK
 #ifdef DEBUG_A_BLOCK
-float Testdin[MAX_SUBSET_SIZE][MAX_DIMENSION_BIG] = {
+static float Testdin[MAX_SUBSET_SIZE][MAX_DIMENSION_BIG] = {
     {29440.0000, 29440.0000, 30255.0000, 0.000000000},
     {29440.0000, 29440.0000, 30123.0000, 0.000000000},
     {29440.0000, 29440.0000, 29440.0000, 0.000000000},
@@ -3732,7 +3762,13 @@ static float bc6h_encoder_CompressBlock(BC6HBlockEncoder *enc,
     }
 
     // now run through all two regions shapes to find the best pattern
-    for (int shape = 0; shape < MAX_BC6H_PARTITIONS; shape++)
+    int partitions_to_try = enc->m_partitionsToTry;
+    if (partitions_to_try < 0)
+        partitions_to_try = 0;
+    if (partitions_to_try > MAX_BC6H_PARTITIONS)
+        partitions_to_try = MAX_BC6H_PARTITIONS;
+
+    for (int shape = 0; shape < partitions_to_try; shape++)
     {
         error = bc6h_encoder_FindBestPattern(enc, BC6H_data, true, shape);
         if (error < bestError)
@@ -3797,17 +3833,41 @@ static int bc6enc_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
         const uint8_t *row = block + y * stride;
 
         for (int x = 0; x < 4; x++) {
-            const uint8_t *px = row + x * 6;
             uint16_t r, g, b;
             int idx = y * 4 + x;
 
-            memcpy(&r, px, 2);
-            memcpy(&g, px + 2, 2);
-            memcpy(&b, px + 4, 2);
+            if (bc6h_input_format == BC6ENC_INPUT_RGBF16) {
+                const uint8_t *px = row + x * 6;
 
-            in[idx][0] = bc6h_half_to_float(r);
-            in[idx][1] = bc6h_half_to_float(g);
-            in[idx][2] = bc6h_half_to_float(b);
+                memcpy(&r, px, 2);
+                memcpy(&g, px + 2, 2);
+                memcpy(&b, px + 4, 2);
+
+                in[idx][0] = bc6h_half_to_float(r);
+                in[idx][1] = bc6h_half_to_float(g);
+                in[idx][2] = bc6h_half_to_float(b);
+            } else if (bc6h_input_format == BC6ENC_INPUT_RGBA64LE) {
+                const uint8_t *px = row + x * 8;
+
+                r = AV_RL16(px + 0);
+                g = AV_RL16(px + 2);
+                b = AV_RL16(px + 4);
+
+                in[idx][0] = bc6h_u16_to_float(r);
+                in[idx][1] = bc6h_u16_to_float(g);
+                in[idx][2] = bc6h_u16_to_float(b);
+            } else {
+                const uint8_t *px = row + x * 8;
+
+                r = AV_RB16(px + 0);
+                g = AV_RB16(px + 2);
+                b = AV_RB16(px + 4);
+
+                in[idx][0] = bc6h_u16_to_float(r);
+                in[idx][1] = bc6h_u16_to_float(g);
+                in[idx][2] = bc6h_u16_to_float(b);
+            }
+
             in[idx][3] = 0.0f;
         }
     }
@@ -3819,11 +3879,23 @@ static int bc6enc_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
 void ff_bc6enc_init(BC6EncContext *c, int is_signed, uint16_t mode_mask,
                     float exposure, float quality, int use_pattern)
 {
+    ff_bc6enc_init_input(c, is_signed, mode_mask, exposure, quality,
+                         use_pattern, BC6ENC_INPUT_RGBF16, 0, 0);
+}
+
+void ff_bc6enc_init_input(BC6EncContext *c, int is_signed, uint16_t mode_mask,
+                          float exposure, float quality, int use_pattern,
+                          BC6EncInputFormat input_fmt, int max_try,
+                          int partitions_to_try)
+{
     bc6h_params.is_signed = is_signed;
     bc6h_params.mode_mask = mode_mask;
     bc6h_params.exposure = exposure;
     bc6h_params.quality = quality;
     bc6h_params.use_pattern = use_pattern;
+    bc6h_input_format = input_fmt;
+    bc6h_params.max_try = max_try < 0 ? 0 : max_try;
+    bc6h_params.partitions_to_try = partitions_to_try < 0 ? 0 : partitions_to_try;
 
     bc6h_init_tables();
     init_ramps();

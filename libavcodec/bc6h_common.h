@@ -71,7 +71,8 @@ enum {
 #define R_3(ep) (ep)[1][1][i]
 
 #define MASK(n) ((1 << (n)) - 1)
-#define SIGN_EXTEND(w, tbits) ((((signed(w)) & (1 << ((tbits)-1))) ? ((~0) << (tbits)) : 0) | (signed(w)))
+#define SIGN_EXTEND(w, tbits) \
+    (((((int)(w)) & (1 << ((tbits) - 1))) ? ((~0) << (tbits)) : 0) | ((int)(w)))
 
 typedef unsigned int uint;
 

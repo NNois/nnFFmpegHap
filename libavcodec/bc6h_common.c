@@ -37,7 +37,7 @@ const int g_indexfixups[32] = {
 const int g_aWeights3[8] = {0, 9, 18, 27, 37, 46, 55, 64};
 const int g_aWeights4[16] = {0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64};
 
-PARTITIONS[MAX_SUBSETS][MAX_PARTITIONS][MAX_SUBSET_SIZE] = {
+const int PARTITIONS[MAX_SUBSETS][MAX_PARTITIONS][MAX_SUBSET_SIZE] = {
     // Single subset partitions for both BC6H abd BC7
     {
         {

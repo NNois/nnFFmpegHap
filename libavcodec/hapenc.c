@@ -24,7 +24,7 @@
  * @file
  * Hap encoder
  *
- * Fourcc: Hap1, Hap5, HapY, HapA, HapM, Hap7
+ * Fourcc: Hap1, Hap5, HapY, HapA, HapM, Hap7, HapH
  *
  * https://github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md
  */
@@ -39,6 +39,8 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
+#include "bc6enc.h"
+#include "bc6h_common.h"
 #include "bc7enc.h"
 #include "codec_internal.h"
 #include "encode.h"
@@ -55,6 +57,50 @@ enum HapHeaderLength {
 };
 
 #define HAP_UINT24_MAX 0x00FFFFFF
+
+static float bc6_quality_to_bc6(int level)
+{
+    if (level <= 0)
+        return 0.0f;
+    if (level >= 100)
+        return 1.0f;
+    return level / 100.0f;
+}
+
+static int hap_get_supported_config(const AVCodecContext *avctx,
+                                    const AVCodec *codec,
+                                    enum AVCodecConfig config,
+                                    unsigned flags, const void **out,
+                                    int *out_num)
+{
+    if (config == AV_CODEC_CONFIG_PIX_FORMAT) {
+        static const enum AVPixelFormat pix_fmts_haph[] = {
+            AV_PIX_FMT_RGBF16, AV_PIX_FMT_RGBA64LE, AV_PIX_FMT_RGBA64BE,
+            AV_PIX_FMT_NONE
+        };
+        static const enum AVPixelFormat pix_fmts_other[] = {
+            AV_PIX_FMT_RGBA, AV_PIX_FMT_GRAY8,
+            AV_PIX_FMT_NONE
+        };
+        const HapContext *ctx = avctx ? avctx->priv_data : NULL;
+        const enum AVPixelFormat *fmts = pix_fmts_other;
+
+        if (ctx && (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF ||
+                    ctx->opt_tex_fmt == HAP_FMT_BPTC_SF))
+            fmts = pix_fmts_haph;
+
+        *out = fmts;
+        if (out_num) {
+            int i = 0;
+            while (fmts[i] != AV_PIX_FMT_NONE)
+                i++;
+            *out_num = i;
+        }
+        return 0;
+    }
+
+    return ff_default_get_supported_config(avctx, codec, config, flags, out, out_num);
+}
 
 static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length, const AVFrame *f)
 {
@@ -431,9 +477,20 @@ static av_cold int hap_init(AVCodecContext *avctx)
         return AVERROR_INVALIDDATA;
     }
 
+    if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF || ctx->opt_tex_fmt == HAP_FMT_BPTC_SF) {
+        if (avctx->pix_fmt != AV_PIX_FMT_RGBF16 &&
+            avctx->pix_fmt != AV_PIX_FMT_RGBA64LE &&
+            avctx->pix_fmt != AV_PIX_FMT_RGBA64BE) {
+            av_log(avctx, AV_LOG_ERROR,
+                   "HapH requires RGBF16 or RGBA64 input.\n");
+            return AVERROR(EINVAL);
+        }
+    }
+
     ff_texturedspenc_init(&dxtc);
 
     ctx->texture_count = 1;  /* Default to single texture */
+    ctx->enc[0].raw_ratio = 16;
 
     switch (ctx->opt_tex_fmt) {
     case HAP_FMT_RGBDXT1:
@@ -444,12 +501,34 @@ static av_cold int hap_init(AVCodecContext *avctx)
         break;
     case HAP_FMT_BPTC: {
         BC7EncContext bc7;
-        ff_bc7enc_init(&bc7, BC7ENC_TRUE, BC7ENC_MAX_PARTITIONS1, ctx->opt_bc7_uber_level,
+        ff_bc7enc_init(&bc7, BC7ENC_TRUE, BC7ENC_MAX_PARTITIONS1, ctx->opt_bc7_quality,
                        BC7ENC_TRUE, BC7ENC_TRUE);
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
         avctx->bits_per_coded_sample = 32;
         ctx->enc[0].tex_funct = bc7.bc7enc_block;
+        break;
+    }
+    case HAP_FMT_BPTC_UF:
+    case HAP_FMT_BPTC_SF: {
+        BC6EncContext bc6;
+        int is_signed = ctx->opt_tex_fmt == HAP_FMT_BPTC_SF;
+        float quality = bc6_quality_to_bc6(ctx->opt_bc6_quality);
+        BC6EncInputFormat input_fmt = BC6ENC_INPUT_RGBF16;
+
+        if (avctx->pix_fmt == AV_PIX_FMT_RGBA64LE)
+            input_fmt = BC6ENC_INPUT_RGBA64LE;
+        else if (avctx->pix_fmt == AV_PIX_FMT_RGBA64BE)
+            input_fmt = BC6ENC_INPUT_RGBA64BE;
+
+        ff_bc6enc_init_input(&bc6, is_signed, 0xFFFF, 1.0f, quality, 0,
+                             input_fmt, 0,
+                             ctx->opt_bc6_partition_to_try);
+        ctx->enc[0].tex_ratio = 16;
+        ctx->enc[0].raw_ratio = input_fmt == BC6ENC_INPUT_RGBF16 ? 24 : 32;
+        avctx->codec_tag = MKTAG('H', 'a', 'p', 'H');
+        avctx->bits_per_coded_sample = 48;
+        ctx->enc[0].tex_funct = bc6.bc6enc_block;
         break;
     }
     case HAP_FMT_RGBADXT5:
@@ -486,7 +565,6 @@ static av_cold int hap_init(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Invalid format %02X\n", ctx->opt_tex_fmt);
         return AVERROR_INVALIDDATA;
     }
-    ctx->enc[0].raw_ratio = 16;
     ctx->enc[0].slice_count = av_clip(avctx->thread_count, 1, avctx->height / TEXTURE_BLOCK_H);
 
     block_count = (avctx->width  / TEXTURE_BLOCK_W) *
@@ -561,11 +639,15 @@ static const AVOption options[] = {
     { "format", NULL, OFFSET(opt_tex_fmt), AV_OPT_TYPE_INT, { .i64 = HAP_FMT_RGBDXT1 }, HAP_FMT_RGTC1, HAP_FMT_YCOCGDXT5, FLAGS, .unit = "format" },
         { "hap",       "Hap 1 (DXT1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBDXT1   }, 0, 0, FLAGS, .unit = "format" },
         { "hap_r",     "Hap R (BC7 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC }, 0, 0, FLAGS, .unit = "format" },
+        { "hap_h",     "Hap HDR (BC6U textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC_UF }, 0, 0, FLAGS, .unit = "format" },
+        { "hap_hs",    "Hap HDR Signed (BC6S textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC_SF }, 0, 0, FLAGS, .unit = "format" },
         { "hap_alpha", "Hap Alpha (DXT5 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBADXT5  }, 0, 0, FLAGS, .unit = "format" },
         { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
-    { "bc7_uber", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_uber_level), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
+    { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
+    { "bc6_quality", "BC6 quality level (Hap H only, 0-100)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 100 }, 0, 100, FLAGS },
+    { "bc6_partition_to_try", "BC6 partitions to try (Hap H only)", OFFSET(opt_bc6_partition_to_try), AV_OPT_TYPE_INT, { .i64 = MAX_BC6H_PARTITIONS }, 0, MAX_BC6H_PARTITIONS, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },
@@ -592,6 +674,8 @@ const FFCodec ff_hap_encoder = {
     .init           = hap_init,
     FF_CODEC_ENCODE_CB(hap_encode),
     .close          = hap_close,
-    CODEC_PIXFMTS(AV_PIX_FMT_RGBA, AV_PIX_FMT_GRAY8),
+    CODEC_PIXFMTS(AV_PIX_FMT_RGBA, AV_PIX_FMT_GRAY8, AV_PIX_FMT_RGBF16,
+                  AV_PIX_FMT_RGBA64LE, AV_PIX_FMT_RGBA64BE),
     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
+    .get_supported_config = hap_get_supported_config,
 };

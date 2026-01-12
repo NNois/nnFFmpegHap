@@ -5,6 +5,10 @@
 
 set -e
 
+LOG_FILE="${FFMPEG_BUILD_LOG:-build-shared.log}"
+: > "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
 FFMPEG_BIN="$FFMPEG_PREFIX/bin"
 

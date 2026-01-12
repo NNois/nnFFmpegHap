@@ -26,7 +26,7 @@
  * @file
  * Hap decoder
  *
- * Fourcc: Hap1, Hap5, HapY, HapA, HapM, Hap7
+ * Fourcc: Hap1, Hap5, HapY, HapA, HapM, Hap7, HapH
  *
  * https://github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md
  */
@@ -38,6 +38,7 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
+#include "bc6dec.h"
 #include "bc7dec.h"
 #include "codec_internal.h"
 #include "hap.h"
@@ -129,12 +130,13 @@ static int hap_can_use_tex_in_place(HapContext *ctx)
     return 1;
 }
 
-static int hap_parse_frame_header(AVCodecContext *avctx)
+static int hap_parse_frame_header(AVCodecContext *avctx, int *out_tex_format)
 {
     HapContext *ctx = avctx->priv_data;
     GetByteContext *gbc = &ctx->gbc;
     int section_size;
     enum HapSectionType section_type;
+    int tex_format;
     const char *compressorstr;
     int i, ret;
 
@@ -142,17 +144,22 @@ static int hap_parse_frame_header(AVCodecContext *avctx)
     if (ret != 0)
         return ret;
 
-    if ((avctx->codec_tag == MKTAG('H','a','p','1') && (section_type & 0x0F) != HAP_FMT_RGBDXT1) ||
-        (avctx->codec_tag == MKTAG('H','a','p','5') && (section_type & 0x0F) != HAP_FMT_RGBADXT5) ||
-        (avctx->codec_tag == MKTAG('H','a','p','Y') && (section_type & 0x0F) != HAP_FMT_YCOCGDXT5) ||
-        (avctx->codec_tag == MKTAG('H','a','p','A') && (section_type & 0x0F) != HAP_FMT_RGTC1) ||
-        (avctx->codec_tag == MKTAG('H','a','p','7') && (section_type & 0x0F) != HAP_FMT_BPTC) ||
-        ((avctx->codec_tag == MKTAG('H','a','p','M') && (section_type & 0x0F) != HAP_FMT_RGTC1) &&
-                                                        (section_type & 0x0F) != HAP_FMT_YCOCGDXT5)) {
+    tex_format = section_type & 0x0F;
+    if ((avctx->codec_tag == MKTAG('H','a','p','1') && tex_format != HAP_FMT_RGBDXT1) ||
+        (avctx->codec_tag == MKTAG('H','a','p','5') && tex_format != HAP_FMT_RGBADXT5) ||
+        (avctx->codec_tag == MKTAG('H','a','p','Y') && tex_format != HAP_FMT_YCOCGDXT5) ||
+        (avctx->codec_tag == MKTAG('H','a','p','A') && tex_format != HAP_FMT_RGTC1) ||
+        (avctx->codec_tag == MKTAG('H','a','p','7') && tex_format != HAP_FMT_BPTC) ||
+        (avctx->codec_tag == MKTAG('H','a','p','H') &&
+         tex_format != HAP_FMT_BPTC_UF && tex_format != HAP_FMT_BPTC_SF) ||
+        (avctx->codec_tag == MKTAG('H','a','p','M') &&
+         tex_format != HAP_FMT_RGTC1 && tex_format != HAP_FMT_YCOCGDXT5)) {
         av_log(avctx, AV_LOG_ERROR,
-               "Invalid texture format %#04x.\n", section_type & 0x0F);
+               "Invalid texture format %#04x.\n", tex_format);
         return AVERROR_INVALIDDATA;
     }
+    if (out_tex_format)
+        *out_tex_format = tex_format;
 
     switch (section_type & 0xF0) {
         case HAP_COMP_NONE:
@@ -257,6 +264,7 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
     int ret, i, t;
     int section_size;
     enum HapSectionType section_type;
+    int tex_format = 0;
     int start_texture_section = 0;
 
     bytestream2_init(&ctx->gbc, avpkt->data, avpkt->size);
@@ -280,9 +288,14 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
 
     for (t = 0; t < ctx->texture_count; t++) {
         bytestream2_seek(&ctx->gbc, start_texture_section, SEEK_SET);
-        ret = hap_parse_frame_header(avctx);
+        ret = hap_parse_frame_header(avctx, &tex_format);
         if (ret < 0)
             return ret;
+
+        if (avctx->codec_tag == MKTAG('H','a','p','H')) {
+            ctx->dec[t].tex_funct = (tex_format == HAP_FMT_BPTC_SF) ?
+                                    ff_bc6dec_block_s : ff_bc6dec_block_u;
+        }
 
         if (ctx->tex_size != (avctx->coded_width  / TEXTURE_BLOCK_W)
             *(avctx->coded_height / TEXTURE_BLOCK_H)
@@ -393,6 +406,13 @@ static av_cold int hap_init(AVCodecContext *avctx)
         avctx->pix_fmt = AV_PIX_FMT_RGBA;
         /* BC7 decode is limited to modes 1/5/6/7 (current encoder output). */
         break;
+    case MKTAG('H','a','p','H'):
+        texture_name = "BC6H";
+        ctx->dec[0].tex_ratio = 16;
+        ctx->dec[0].raw_ratio = 24;
+        ctx->dec[0].tex_funct = ff_bc6dec_block_u;
+        avctx->pix_fmt = AV_PIX_FMT_RGBF16;
+        break;
     case MKTAG('H','a','p','M'):
         texture_name  = "DXT5-YCoCg-scaled / RGTC1";
         ctx->dec[0].tex_ratio = 16;
@@ -440,6 +460,7 @@ const FFCodec ff_hap_decoder = {
         MKTAG('H','a','p','Y'),
         MKTAG('H','a','p','A'),
         MKTAG('H','a','p','7'),
+        MKTAG('H','a','p','H'),
         MKTAG('H','a','p','M'),
         FF_CODEC_TAGS_END,
     },

@@ -35,6 +35,8 @@ enum HapTextureFormat {
     HAP_FMT_RGBADXT5  = 0x0E,
     HAP_FMT_YCOCGDXT5 = 0x0F,
     HAP_FMT_RGTC1     = 0x01,
+    HAP_FMT_BPTC_UF   = 0x02,  /* RGB BPTC unsigned float (BC6U) */
+    HAP_FMT_BPTC_SF   = 0x03,  /* RGB BPTC signed float (BC6S) */
     HAP_FMT_HAPM      = 0x0D,  /* Multi-texture container format for HapM */
 };
 
@@ -67,7 +69,9 @@ typedef struct HapContext {
     enum HapTextureFormat opt_tex_fmt; /* Texture type (encoder only) */
     int opt_chunk_count; /* User-requested chunk count (encoder only) */
     int opt_compressor; /* User-requested compressor (encoder only) */
-    int opt_bc7_uber_level; /* BC7 encoder quality level (encoder only) */
+    int opt_bc7_quality; /* BC7 encoder quality level (encoder only) */
+    int opt_bc6_quality; /* BC6 encoder quality level (encoder only) */
+    int opt_bc6_partition_to_try; /* BC6 partition limit override (encoder only) */
 
     int chunk_count;
     HapChunk *chunks;
