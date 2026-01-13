@@ -202,31 +202,50 @@ static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
     return 0;
 }
 
+static int hap_bc6h_quality_index(int quality)
+{
+    if (quality < 0)
+        return 0;
+    if (quality > 4)
+        return 4;
+    return quality;
+}
+
 static const char *hap_bc6h_profile_name(int quality)
 {
-    if (quality >= 80)
+    switch (hap_bc6h_quality_index(quality)) {
+    case 4:
         return "veryslow";
-    if (quality >= 60)
+    case 3:
         return "slow";
-    if (quality >= 40)
+    case 2:
         return "basic";
-    if (quality >= 20)
+    case 1:
         return "fast";
-    return "veryfast";
+    default:
+        return "veryfast";
+    }
 }
 
 static void hap_bc6h_profile_for_quality(int quality, bc6h_enc_settings *settings)
 {
-    if (quality >= 80)
+    switch (hap_bc6h_quality_index(quality)) {
+    case 4:
         GetProfile_bc6h_veryslow(settings);
-    else if (quality >= 60)
+        break;
+    case 3:
         GetProfile_bc6h_slow(settings);
-    else if (quality >= 40)
+        break;
+    case 2:
         GetProfile_bc6h_basic(settings);
-    else if (quality >= 20)
+        break;
+    case 1:
         GetProfile_bc6h_fast(settings);
-    else
+        break;
+    default:
         GetProfile_bc6h_veryfast(settings);
+        break;
+    }
 }
 
 static int hap_bc6h_compress_ispc(AVCodecContext *avctx, uint8_t *out,
@@ -810,7 +829,7 @@ static const AVOption options[] = {
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
     { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
-    { "bc6_quality", "BC6 quality level (Hap H only, 0-100)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 100 }, 0, 100, FLAGS },
+    { "bc6_quality", "BC6 quality level (Hap H only, 0-4)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 4, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },

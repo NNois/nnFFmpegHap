@@ -32,10 +32,20 @@ echo "Building C++ objects..."
 $CXX $CXXFLAGS -c "$SRC_DIR/ispc_texcomp.cpp" -o "$BUILD_DIR/ispc_texcomp.o"
 $CXX $CXXFLAGS -c "$SRC_DIR/ispc_texcomp_astc.cpp" -o "$BUILD_DIR/ispc_texcomp_astc.o"
 
+echo "Building chkstk shim for MinGW..."
+cat > "$BUILD_DIR/chkstk.c" <<'EOF'
+#ifdef __x86_64__
+extern void ___chkstk(void);
+void __chkstk(void) { ___chkstk(); }
+#endif
+EOF
+$CXX $CXXFLAGS -c "$BUILD_DIR/chkstk.c" -o "$BUILD_DIR/chkstk.o"
+
 echo "Linking DLL..."
 $CXX -shared -o "$OUT_DIR/ispc_texcomp.dll" \
     "$BUILD_DIR/ispc_texcomp.o" \
     "$BUILD_DIR/ispc_texcomp_astc.o" \
+    "$BUILD_DIR/chkstk.o" \
     "$SRC_DIR"/kernel_ispc*.o \
     "$SRC_DIR"/kernel_astc_ispc*.o \
     "$SRC_DIR/ispc_texcomp.def" \

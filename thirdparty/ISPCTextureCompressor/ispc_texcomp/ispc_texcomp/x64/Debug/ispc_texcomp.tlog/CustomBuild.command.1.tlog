@@ -1,0 +1,4 @@
+^C:\FF\FF\THIRDPARTY\ISPCTEXTURECOMPRESSOR\ISPC_TEXCOMP\KERNEL.ISPC
+"C:\ff\ff\thirdparty\ISPCTextureCompressor\ispc_texcomp\..\ISPC\win\ispc.exe" -O2 "kernel.ispc" -o "C:\ff\ff\thirdparty\ISPCTextureCompressor\ispc_texcomp\x64\Debug\kernel.obj" -h "C:\ff\ff\thirdparty\ISPCTextureCompressor\ispc_texcomp\kernel_ispc.h" --target=sse2,sse4,avx,avx2 --opt=fast-math
+^C:\FF\FF\THIRDPARTY\ISPCTEXTURECOMPRESSOR\ISPC_TEXCOMP\KERNEL_ASTC.ISPC
+"C:\ff\ff\thirdparty\ISPCTextureCompressor\ispc_texcomp\..\ISPC\win\ispc.exe" -O2 "kernel_astc.ispc" -o "C:\ff\ff\thirdparty\ISPCTextureCompressor\ispc_texcomp\x64\Debug\kernel_astc.obj" -h "C:\ff\ff\thirdparty\ISPCTextureCompressor\ispc_texcomp\kernel_astc_ispc.h" --target=avx --opt=fast-math

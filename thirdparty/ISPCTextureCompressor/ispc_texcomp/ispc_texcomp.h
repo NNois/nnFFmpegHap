@@ -29,15 +29,15 @@
 #define ISPC_TEXCOMP_EXTERN extern
 #endif
 
-struct rgba_surface
+typedef struct rgba_surface
 {
     uint8_t* ptr;
     int32_t width;
     int32_t height;
     int32_t stride; // in bytes
-};
+} rgba_surface;
 
-struct bc7_enc_settings
+typedef struct bc7_enc_settings
 {
     bool mode_selection[4];
     int refineIterations[8];
@@ -51,23 +51,23 @@ struct bc7_enc_settings
     int refineIterations_channel;
 
     int channels;
-};
+} bc7_enc_settings;
 
-struct bc6h_enc_settings
+typedef struct bc6h_enc_settings
 {
     bool slow_mode;
     bool fast_mode;
     int refineIterations_1p;
     int refineIterations_2p;
     int fastSkipTreshold;
-};
+} bc6h_enc_settings;
 
-struct etc_enc_settings
+typedef struct etc_enc_settings
 {
     int fastSkipTreshold;
-};
+} etc_enc_settings;
 
-struct astc_enc_settings
+typedef struct astc_enc_settings
 {
     int block_width;
     int block_height;
@@ -75,7 +75,7 @@ struct astc_enc_settings
 
     int fastSkipTreshold;
     int refineIterations;
-};
+} astc_enc_settings;
 
 // profiles for RGB data (alpha channel will be ignored)
 ISPC_TEXCOMP_EXTERN void GetProfile_ultrafast(bc7_enc_settings* settings);

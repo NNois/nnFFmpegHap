@@ -69,8 +69,8 @@ typedef struct HapContext {
     enum HapTextureFormat opt_tex_fmt; /* Texture type (encoder only) */
     int opt_chunk_count; /* User-requested chunk count (encoder only) */
     int opt_compressor; /* User-requested compressor (encoder only) */
-    int opt_bc7_quality; /* BC7 encoder quality level (encoder only) */
-    int opt_bc6_quality; /* BC6H GPU preset (0=speed, 1=quality) */
+    int opt_bc7_quality; /* BC7 encoder quality level (0-4, encoder only) */
+    int opt_bc6_quality; /* BC6 encoder quality level (0-4, encoder only) */
 
     int chunk_count;
     HapChunk *chunks;
