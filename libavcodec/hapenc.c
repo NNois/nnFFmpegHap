@@ -468,16 +468,6 @@ static av_cold int hap_init(AVCodecContext *avctx)
         return AVERROR_INVALIDDATA;
     }
 
-    if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF || ctx->opt_tex_fmt == HAP_FMT_BPTC_SF) {
-        if (avctx->pix_fmt != AV_PIX_FMT_RGBF16 &&
-            avctx->pix_fmt != AV_PIX_FMT_RGBA64LE &&
-            avctx->pix_fmt != AV_PIX_FMT_RGBA64BE) {
-            av_log(avctx, AV_LOG_ERROR,
-                   "HapH requires RGBF16 or RGBA64 input.\n");
-            return AVERROR(EINVAL);
-        }
-    }
-
     ff_texturedspenc_init(&dxtc);
 
     ctx->texture_count = 1;  /* Default to single texture */
@@ -629,14 +619,11 @@ static const AVOption options[] = {
     { "format", NULL, OFFSET(opt_tex_fmt), AV_OPT_TYPE_INT, { .i64 = HAP_FMT_RGBDXT1 }, HAP_FMT_RGTC1, HAP_FMT_YCOCGDXT5, FLAGS, .unit = "format" },
         { "hap",       "Hap 1 (DXT1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBDXT1   }, 0, 0, FLAGS, .unit = "format" },
         { "hap_r",     "Hap R (BC7 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC }, 0, 0, FLAGS, .unit = "format" },
-        { "hap_h",     "Hap HDR (BC6U textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC_UF }, 0, 0, FLAGS, .unit = "format" },
-        { "hap_hs",    "Hap HDR Signed (BC6S textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_BPTC_SF }, 0, 0, FLAGS, .unit = "format" },
         { "hap_alpha", "Hap Alpha (DXT5 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGBADXT5  }, 0, 0, FLAGS, .unit = "format" },
     { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
     { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
     { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
     { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
-    { "bc6_quality", "BC6 quality level (Hap H only, 0-100)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 100 }, 0, 100, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
         { "none",       "None", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_COMP_NONE }, 0, 0, FLAGS, .unit = "compressor" },
