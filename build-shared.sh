@@ -38,11 +38,12 @@ rm -f ./*.dll 2>/dev/null || true
 
 echo ""
 echo "Step 2: Configuring build options (SHARED BUILD):"
-echo "  - Core: --enable-gpl --enable-version3 --disable-debug"
+echo "  - Core: --enable-gpl --enable-version3 --enable-nonfree --disable-debug"
 echo "  - Link: --enable-shared --disable-static"
-echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libzimg"
-echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame"
+echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libsvtav1 --enable-libzimg"
+echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
 echo "  - HAP: --enable-libsnappy $ISPCTEXCOMP_CONFIG"
+echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
 echo "  - CFLAGS: -O3 $ISPCTEXCOMP_CFLAGS"
 echo ""
 
@@ -50,6 +51,7 @@ echo ""
 ./configure \
     --enable-gpl \
     --enable-version3 \
+    --enable-nonfree \
     --disable-debug \
     --enable-shared \
     --disable-static \
@@ -58,10 +60,15 @@ echo ""
     --enable-libx264 \
     --enable-libx265 \
     --enable-libvpx \
+    --enable-libaom \
+    --enable-libsvtav1 \
     --enable-libvorbis \
     --enable-libopus \
     --enable-libmp3lame \
+    --enable-libfdk-aac \
     --enable-libzimg \
+    --enable-vulkan \
+    --enable-libshaderc \
     $ISPCTEXCOMP_CONFIG \
     --extra-cflags="-O3 $ISPCTEXCOMP_CFLAGS" \
     --extra-ldflags="$ISPCTEXCOMP_LDFLAGS"

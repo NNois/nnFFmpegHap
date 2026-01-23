@@ -45,9 +45,12 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-x264 \
     mingw-w64-x86_64-x265 \
     mingw-w64-x86_64-libvpx \
+    mingw-w64-x86_64-aom \
+    mingw-w64-x86_64-svt-av1 \
     mingw-w64-x86_64-libvorbis \
     mingw-w64-x86_64-opus \
-    mingw-w64-x86_64-lame
+    mingw-w64-x86_64-lame \
+    mingw-w64-x86_64-fdk-aac
 
 echo ""
 echo "Step 4: Installing additional libraries..."
@@ -58,6 +61,13 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-zlib \
     mingw-w64-x86_64-bzip2 \
     mingw-w64-x86_64-zimg
+
+echo ""
+echo "Step 5: Installing Vulkan libraries..."
+pacman -S --needed --noconfirm \
+    mingw-w64-x86_64-vulkan-headers \
+    mingw-w64-x86_64-vulkan-loader \
+    mingw-w64-x86_64-shaderc
 
 echo ""
 echo ""
@@ -76,9 +86,12 @@ echo "    - Snappy (for HAP encoder) ⭐"
 echo "    - x264 (H.264 encoder)"
 echo "    - x265 (H.265 encoder)"
 echo "    - libvpx (VP8/VP9 encoder)"
+echo "    - libaom (AV1 reference encoder)"
+echo "    - SVT-AV1 (fast AV1 encoder)"
 echo "    - libvorbis (Vorbis audio)"
 echo "    - Opus (Opus audio)"
 echo "    - LAME (MP3 encoder)"
+echo "    - FDK-AAC (high-quality AAC encoder)"
 echo ""
 echo "  Additional Libraries:"
 echo "    - OpenEXR (EXR support)"
@@ -87,13 +100,17 @@ echo "    - SDL2 (video playback for ffplay)"
 echo "    - zlib & bzip2 (compression)"
 echo "    - zimg (zscale filter for high-quality scaling)"
 echo ""
+echo "  Vulkan Libraries:"
+echo "    - Vulkan headers & loader (GPU acceleration)"
+echo "    - Shaderc (SPIR-V shader compiler)"
+echo ""
 echo ""
 echo "You can now build FFmpeg with:"
-echo "  ./build-ffmpeg.sh"
+echo "  ./build-shared.sh"
 echo ""
 echo "Run it now? (Y/n)"
 read -r RUN_BUILD
 if [ -z "$RUN_BUILD" ] || [ "$RUN_BUILD" = "y" ] || [ "$RUN_BUILD" = "Y" ]; then
-    ./build-ffmpeg.sh
+    ./build-shared.sh
 fi
 echo ""
