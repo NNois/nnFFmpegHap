@@ -44,6 +44,7 @@ echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-liba
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
 echo "  - HAP: --enable-libsnappy $ISPCTEXCOMP_CONFIG"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
+echo "  - Hardware Decode: --enable-d3d11va --enable-d3d12va"
 echo "  - CFLAGS: -O3 $ISPCTEXCOMP_CFLAGS"
 echo ""
 
@@ -69,6 +70,8 @@ echo ""
     --enable-libzimg \
     --enable-vulkan \
     --enable-libshaderc \
+    --enable-d3d11va \
+    --enable-d3d12va \
     $ISPCTEXCOMP_CONFIG \
     --extra-cflags="-O3 $ISPCTEXCOMP_CFLAGS" \
     --extra-ldflags="$ISPCTEXCOMP_LDFLAGS"
