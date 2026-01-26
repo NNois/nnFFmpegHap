@@ -1,0 +1,38 @@
+From 99fda7894b9360e1e1e806d3ba778df64e87212e Mon Sep 17 00:00:00 2001
+From: NNois <noel.froger@gmail.com>
+Date: Mon, 26 Jan 2026 11:31:26 +0100
+Subject: [PATCH] patch alpha libvpx playing
+
+Prefer libvpx VPx decoders (alpha support) over native ones.
+Moves ff_libvpx_vp8_decoder and ff_libvpx_vp9_decoder declarations
+before the native VP8/VP9 decoders to ensure alpha channel is recognized.
+---
+ libavcodec/allcodecs.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
+index f5ec2e01e8..465d80f27c 100644
+--- a/libavcodec/allcodecs.c
++++ b/libavcodec/allcodecs.c
+@@ -379,6 +379,9 @@ extern const FFCodec ff_vp6_decoder;
+ extern const FFCodec ff_vp6a_decoder;
+ extern const FFCodec ff_vp6f_decoder;
+ extern const FFCodec ff_vp7_decoder;
++// Prefer libvpx VPx decoders (alpha support) over native ones.
++extern const FFCodec ff_libvpx_vp8_decoder;
++extern const FFCodec ff_libvpx_vp9_decoder;
+ extern const FFCodec ff_vp8_decoder;
+ extern const FFCodec ff_vp8_rkmpp_decoder;
+ extern const FFCodec ff_vp8_v4l2m2m_decoder;
+@@ -810,9 +813,7 @@ extern const FFCodec ff_libvo_amrwbenc_encoder;
+ extern const FFCodec ff_libvorbis_encoder;
+ extern const FFCodec ff_libvorbis_decoder;
+ extern const FFCodec ff_libvpx_vp8_encoder;
+-extern const FFCodec ff_libvpx_vp8_decoder;
+ extern FFCodec ff_libvpx_vp9_encoder;
+-extern const FFCodec ff_libvpx_vp9_decoder;
+ extern const FFCodec ff_libvvenc_encoder;
+ /* preferred over libwebp */
+ extern const FFCodec ff_libwebp_anim_encoder;
+--
+2.34.1
