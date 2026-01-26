@@ -57,6 +57,7 @@ echo ""
     --enable-shared \
     --disable-static \
     --prefix="$FFMPEG_PREFIX" \
+    --enable-zlib \
     --enable-libsnappy \
     --enable-libx264 \
     --enable-libx265 \

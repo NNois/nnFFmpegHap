@@ -56,6 +56,7 @@ echo ""
     --enable-static \
     --disable-shared \
     --prefix=./build \
+    --enable-zlib \
     --enable-libsnappy \
     --enable-libx264 \
     --enable-libx265 \
