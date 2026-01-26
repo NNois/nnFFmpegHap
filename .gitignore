@@ -33,6 +33,7 @@
 /.version
 /build/
 /build-unity-static/
+/build-unity-static-msvc/
 /build-*.log
 /ffmpeg
 /ffplay

@@ -35,18 +35,29 @@ echo "cl.exe: $(command -v cl)"
 echo "link.exe: ${LINK_PATH:-not found}"
 
 echo ""
-echo "Step 1: Cleaning previous build..."
+echo "Step 1: Cleaning previous FFmpeg build..."
 make clean 2>/dev/null || true
 rm -f config.h config.log ffbuild/config.mak 2>/dev/null || true
-rm -rf ./build-unity-static-msvc 2>/dev/null || true
 
 echo ""
-echo "Step 2: Configuring minimal static build (MSVC toolchain)..."
+echo "Step 2: Cleaning and rebuilding zlib with MSVC..."
+# Always rebuild zlib to ensure fresh build with patches
+cmd.exe /c "C:\\ff\\ff\\build-zlib-msvc.bat"
+ZLIB_INSTALL="/c/ff/ff/build-unity-static-msvc/zlib-msvc"
+if [ ! -f "$ZLIB_INSTALL/lib/zlib.lib" ] && [ ! -f "$ZLIB_INSTALL/lib/zlibstatic.lib" ]; then
+  echo "ERROR: zlib build failed"
+  exit 1
+fi
+
+echo ""
+echo "Step 3: Configuring minimal static build (MSVC toolchain)..."
 
 target_prefix="./build-unity-static-msvc"
 
-ZLIB_CFLAGS=""
-ZLIB_LDFLAGS=""
+# Convert MSYS2 paths to Windows paths for MSVC
+ZLIB_INSTALL_WIN="C:/ff/ff/build-unity-static-msvc/zlib-msvc"
+ZLIB_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/zlib-msvc/include"
+ZLIB_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/zlib-msvc/lib"
 
 ./configure \
     --toolchain=msvc \
@@ -63,28 +74,27 @@ ZLIB_LDFLAGS=""
     --enable-swscale \
     --enable-swresample \
     --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe,ogg \
-    --enable-decoder=h264,hevc,vp8,vp9,av1,hap,mjpeg,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,mp3,mp3float \
+    --enable-decoder=h264,hevc,vp8,vp9,av1,hap,png,mjpeg,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,mp3,mp3float \
     --enable-parser=h264,hevc,vp8,vp9,av1,vorbis,aac,mpegaudio \
     --enable-protocol=file,pipe \
-    --disable-d3d11va \
-    --disable-zlib \
-    --disable-bzlib \
-    --disable-iconv \
-    --disable-lzma \
-    --disable-libxml2 \
-    --disable-vulkan \
-    --disable-vaapi \
-    --disable-vdpau \
-    --disable-gnutls \
-    --disable-openssl \
-    --disable-schannel \
-    --disable-securetransport \
+    --enable-hwaccel=h264_d3d11va \
+    --enable-hwaccel=h264_d3d11va2 \
+    --enable-hwaccel=hevc_d3d11va \
+    --enable-hwaccel=hevc_d3d11va2 \
+    --enable-hwaccel=vp8_d3d11va \
+    --enable-hwaccel=vp8_d3d11va2 \
+    --enable-hwaccel=vp9_d3d11va \
+    --enable-hwaccel=vp9_d3d11va2 \
+    --enable-hwaccel=av1_d3d11va \
+    --enable-hwaccel=av1_d3d11va2 \
+    --enable-d3d11va \
+    --enable-zlib \
     --prefix="$target_prefix" \
-    --extra-cflags="/O2" \
-    --extra-ldflags=""
+    --extra-cflags="/O2 $ZLIB_CFLAGS" \
+    --extra-ldflags="$ZLIB_LDFLAGS"
 
 echo ""
-echo "Step 3: Building FFmpeg (static libs only)..."
+echo "Step 4: Building FFmpeg (static libs only)..."
 CPU_CORES=$(nproc)
 make -j"$CPU_CORES"
 make install
@@ -100,7 +110,6 @@ echo ""
 UNITY_PROJECT_WIN="${UNITY_PROJECT_WIN:-J:\\2500_AdToolBox\\AdUnityPackages\\AdPlayer}"
 UNITY_PROJECT_ROOT="$(cygpath -u "$UNITY_PROJECT_WIN" 2>/dev/null || echo "/j/2500_AdToolBox/AdUnityPackages/AdPlayer")"
 UNITY_PLUGIN_FFMPEG="$UNITY_PROJECT_ROOT/Plugin/FFmpeg"
-UNITY_PACKAGE_WINDOWS="$UNITY_PROJECT_ROOT/Packages/com.ad.player/Plugin/Windows"
 
 echo "Copy artifacts to Unity project?"
 
@@ -110,8 +119,10 @@ echo "Run it now? (y/N)"
 read -r RUN_COPY
 if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
     echo ""
-    echo "Step 4: Copying headers and libs..."
+    echo "Step 5: Copying headers and libs..."
     mkdir -p "$UNITY_PLUGIN_FFMPEG/include" "$UNITY_PLUGIN_FFMPEG/lib"
+
+    # Copy FFmpeg headers and libs
     if [ -d "$target_prefix/include" ]; then
         cp -R "$target_prefix/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
     else
@@ -123,6 +134,18 @@ if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
         echo "Note: $target_prefix/lib not found"
     fi
 
+    # Copy zlib headers and libs
+    if [ -d "$ZLIB_INSTALL/include" ]; then
+        cp -R "$ZLIB_INSTALL/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
+    else
+        echo "Note: zlib include not found"
+    fi
+    if [ -d "$ZLIB_INSTALL/lib" ]; then
+        cp -R "$ZLIB_INSTALL/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
+    else
+        echo "Note: zlib lib not found"
+    fi
+
     echo ""
-    echo "✓ Copy complete"
+    echo "✓ Copy complete (FFmpeg + zlib)"
 fi
