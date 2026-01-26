@@ -1,6 +1,7 @@
 #!/bin/bash
 # Minimal static FFmpeg build for Unity plugin usage
 # Focus: demux + decoders for H.264/H.265/VP8/VP9/AV1 + image sequences (png/jpg)
+# Audio: PCM, AAC (libfdk-aac), Vorbis
 
 set -e
 
@@ -31,10 +32,13 @@ target_prefix="./build-unity-static"
     --enable-avformat \
     --enable-avcodec \
     --enable-avutil \
-    --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe \
-    --enable-decoder=h264,hevc,vp8,vp9,av1,png,mjpeg \
-    --enable-parser=h264,hevc,vp8,vp9,av1 \
+    --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe,ogg \
+    --enable-decoder=h264,hevc,vp8,vp9,av1,png,mjpeg,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,libfdk_aac,vorbis \
+    --enable-parser=h264,hevc,vp8,vp9,av1,vorbis \
     --enable-protocol=file,pipe \
+    --enable-libfdk-aac \
+    --enable-libvorbis \
+    --enable-nonfree \
     --prefix="$target_prefix" \
     --extra-cflags="-O3" \
     --extra-ldflags=""
