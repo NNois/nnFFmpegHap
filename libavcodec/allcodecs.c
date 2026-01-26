@@ -379,6 +379,9 @@ extern const FFCodec ff_vp6_decoder;
 extern const FFCodec ff_vp6a_decoder;
 extern const FFCodec ff_vp6f_decoder;
 extern const FFCodec ff_vp7_decoder;
+// Prefer libvpx VPx decoders (alpha support) over native ones.
+extern const FFCodec ff_libvpx_vp8_decoder;
+extern const FFCodec ff_libvpx_vp9_decoder;
 extern const FFCodec ff_vp8_decoder;
 extern const FFCodec ff_vp8_rkmpp_decoder;
 extern const FFCodec ff_vp8_v4l2m2m_decoder;
@@ -810,9 +813,7 @@ extern const FFCodec ff_libvo_amrwbenc_encoder;
 extern const FFCodec ff_libvorbis_encoder;
 extern const FFCodec ff_libvorbis_decoder;
 extern const FFCodec ff_libvpx_vp8_encoder;
-extern const FFCodec ff_libvpx_vp8_decoder;
 extern FFCodec ff_libvpx_vp9_encoder;
-extern const FFCodec ff_libvpx_vp9_decoder;
 extern const FFCodec ff_libvvenc_encoder;
 /* preferred over libwebp */
 extern const FFCodec ff_libwebp_anim_encoder;
