@@ -32,14 +32,13 @@ if errorlevel 1 (
 )
 
 echo Cleaning previous x264 build artifacts...
-if exist "%X264_INSTALL%" (
-  rd /s /q "%X264_INSTALL%"
-)
+if exist "%X264_INSTALL%" rd /s /q "%X264_INSTALL%"
 
 if not exist "%X264_SRC%" mkdir "%X264_SRC%"
 if not exist "%X264_SRC%\x264" (
   echo Cloning x264 (%X264_REF%)...
-  git clone --depth 1 -b %X264_REF% %X264_GIT% "%X264_SRC%\x264" || exit /b 1
+  git clone --depth 1 -b %X264_REF% %X264_GIT% "%X264_SRC%\x264"
+  if errorlevel 1 exit /b 1
 )
 
 if not exist "%X264_SRC%\x264" (
