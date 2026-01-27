@@ -66,24 +66,7 @@ if [ ! -f "$VPX_INSTALL/lib/x64/vpx.lib" ] && [ ! -f "$VPX_INSTALL/lib/vpx.lib" 
 fi
 
 echo ""
-echo "Step 4: Cleaning and rebuilding x264/x265 with MSVC..."
-cmd.exe /c "C:\\ff\\ff\\build-x264-msvc.bat"
-cmd.exe /c "C:\\ff\\ff\\build-x265-msvc.bat"
-X264_INSTALL="/c/ff/ff/build-unity-static-msvc/x264-msvc"
-X265_INSTALL="/c/ff/ff/build-unity-static-msvc/x265-msvc"
-
-if [ ! -f "$X264_INSTALL/lib/libx264.lib" ] && [ ! -f "$X264_INSTALL/lib/x264.lib" ]; then
-  echo "ERROR: x264 build failed or libx264.lib/x264.lib not found"
-  exit 1
-fi
-
-if [ ! -f "$X265_INSTALL/lib/x265.lib" ] && [ ! -f "$X265_INSTALL/lib/x265-static.lib" ]; then
-  echo "ERROR: x265 build failed or x265.lib not found"
-  exit 1
-fi
-
-echo ""
-echo "Step 5: Configuring minimal static build (MSVC toolchain)..."
+echo "Step 4: Configuring minimal static build (MSVC toolchain)..."
 
 target_prefix="./build-unity-static-msvc"
 
@@ -108,23 +91,6 @@ fi
 # Add vpx lib for FFmpeg's check_lib tests
 VPX_EXTRA_LIBS="vpx.lib"
 
-# x264/x265 (H.264/H.265 encoders)
-X264_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/x264-msvc/include"
-X264_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/x264-msvc/lib"
-if [ -f "$X264_INSTALL/lib/libx264.lib" ]; then
-  X264_EXTRA_LIBS="libx264.lib"
-else
-  X264_EXTRA_LIBS="x264.lib"
-fi
-
-X265_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/x265-msvc/include"
-X265_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/x265-msvc/lib"
-if [ -f "$X265_INSTALL/lib/x265.lib" ]; then
-  X265_EXTRA_LIBS="x265.lib"
-else
-  X265_EXTRA_LIBS="x265-static.lib"
-fi
-
 ./configure \
     --toolchain=msvc \
     --target-os=win64 \
@@ -135,8 +101,6 @@ fi
     --disable-programs \
     --disable-x86asm \
     --enable-gpl \
-    --enable-libx264 \
-    --enable-libx265 \
     --enable-libvpx \
     --enable-avformat \
     --enable-avcodec \
@@ -145,9 +109,8 @@ fi
     --enable-swresample \
     --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe,ogg,mp3 \
     --disable-decoder=vp8,vp9 \
-    --enable-decoder=h264,hevc,libvpx_vp8,libvpx_vp9,av1,hap,prores,png,mjpeg,targa,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,mp3,mp3float \
-    --enable-encoder=libx264,libx265 \
-    --enable-parser=h264,hevc,vp8,vp9,av1,vorbis,aac,mpegaudio \
+    --enable-decoder=h264,hevc,libvpx_vp8,libvpx_vp9,av1,hap,prores,png,mjpeg,targa,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,opus,mp3,mp3float \
+    --enable-parser=h264,hevc,vp8,vp9,av1,vorbis,opus,aac,mpegaudio \
     --enable-protocol=file,pipe \
     --enable-hwaccel=h264_d3d11va \
     --enable-hwaccel=h264_d3d11va2 \
@@ -164,12 +127,12 @@ fi
     --disable-vulkan \
     --disable-libshaderc \
     --prefix="$target_prefix" \
-    --extra-cflags="/O2 $ZLIB_CFLAGS $VPX_CFLAGS $X264_CFLAGS $X265_CFLAGS" \
-    --extra-ldflags="$ZLIB_LDFLAGS $VPX_LDFLAGS $X264_LDFLAGS $X265_LDFLAGS" \
-    --extra-libs="$VPX_EXTRA_LIBS $X264_EXTRA_LIBS $X265_EXTRA_LIBS"
+    --extra-cflags="/O2 $ZLIB_CFLAGS $VPX_CFLAGS" \
+    --extra-ldflags="$ZLIB_LDFLAGS $VPX_LDFLAGS" \
+    --extra-libs="$VPX_EXTRA_LIBS"
 
 echo ""
-echo "Step 6: Building FFmpeg (static libs only)..."
+echo "Step 5: Building FFmpeg (static libs only)..."
 CPU_CORES=$(nproc)
 make -j"$CPU_CORES"
 make install
@@ -194,7 +157,7 @@ echo "Run it now? (Y/n)"
 read -r RUN_COPY
 if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
     echo ""
-    echo "Step 7: Copying headers and libs..."
+    echo "Step 6: Copying headers and libs..."
     mkdir -p "$UNITY_PLUGIN_FFMPEG/include" "$UNITY_PLUGIN_FFMPEG/lib"
 
     # Copy FFmpeg headers and libs
@@ -234,32 +197,8 @@ if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
     fi
 
     echo ""
-    # Copy x264 headers and libs
-    if [ -d "$X264_INSTALL/include" ]; then
-        cp -R "$X264_INSTALL/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
-    else
-        echo "Note: x264 include not found"
-    fi
-    if [ -d "$X264_INSTALL/lib" ]; then
-        cp -R "$X264_INSTALL/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
-    else
-        echo "Note: x264 lib not found"
-    fi
-
-    # Copy x265 headers and libs
-    if [ -d "$X265_INSTALL/include" ]; then
-        cp -R "$X265_INSTALL/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
-    else
-        echo "Note: x265 include not found"
-    fi
-    if [ -d "$X265_INSTALL/lib" ]; then
-        cp -R "$X265_INSTALL/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
-    else
-        echo "Note: x265 lib not found"
-    fi
-
     echo ""
-    echo "✓ Copy complete (FFmpeg + zlib + libvpx + x264 + x265)"
+    echo "✓ Copy complete (FFmpeg + zlib + libvpx)"
 fi
 
 echo ""
