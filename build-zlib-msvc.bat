@@ -42,6 +42,9 @@ pushd "%ZLIB_SRC%\zlib-%ZLIB_VER%"
 echo Cleaning zlib source directory...
 nmake -f win32\Makefile.msc clean 2>nul || rem
 
+echo Patching Makefile.msc to use static CRT (/MT instead of /MD)...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content 'win32\Makefile.msc') -replace '-MD','-MT' | Set-Content 'win32\Makefile.msc'"
+
 echo Building zlib with MSVC (pure C, no ASM)...
 nmake -f win32\Makefile.msc || exit /b 1
 

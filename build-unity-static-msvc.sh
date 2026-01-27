@@ -50,7 +50,23 @@ if [ ! -f "$ZLIB_INSTALL/lib/zlib.lib" ] && [ ! -f "$ZLIB_INSTALL/lib/zlibstatic
 fi
 
 echo ""
-echo "Step 3: Configuring minimal static build (MSVC toolchain)..."
+echo "Step 3: Cleaning and rebuilding libvpx with MSVC..."
+cmd.exe /c "C:\\ff\\ff\\build-libvpx-msvc.bat"
+VPX_INSTALL="/c/ff/ff/build-unity-static-msvc/libvpx-msvc"
+
+# Rename vpxmd.lib to vpx.lib for FFmpeg compatibility
+if [ -f "$VPX_INSTALL/lib/x64/vpxmd.lib" ] && [ ! -f "$VPX_INSTALL/lib/x64/vpx.lib" ]; then
+  echo "Copying vpxmd.lib to vpx.lib for FFmpeg detection..."
+  cp "$VPX_INSTALL/lib/x64/vpxmd.lib" "$VPX_INSTALL/lib/x64/vpx.lib"
+fi
+
+if [ ! -f "$VPX_INSTALL/lib/x64/vpx.lib" ] && [ ! -f "$VPX_INSTALL/lib/vpx.lib" ] && [ ! -f "$VPX_INSTALL/lib/libvpx.lib" ]; then
+  echo "ERROR: libvpx build failed or vpx.lib not found"
+  exit 1
+fi
+
+echo ""
+echo "Step 4: Configuring minimal static build (MSVC toolchain)..."
 
 target_prefix="./build-unity-static-msvc"
 
@@ -58,6 +74,23 @@ target_prefix="./build-unity-static-msvc"
 ZLIB_INSTALL_WIN="C:/ff/ff/build-unity-static-msvc/zlib-msvc"
 ZLIB_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/zlib-msvc/include"
 ZLIB_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/zlib-msvc/lib"
+
+# libvpx (required for VP8/VP9 with alpha)
+VPX_ROOT_WIN="${VPX_ROOT:-C:\\ff\\ff\\build-unity-static-msvc\\libvpx-msvc}"
+VPX_ROOT_UNIX="$(cygpath -u "$VPX_ROOT_WIN" 2>/dev/null || echo "")"
+if [ -z "$VPX_ROOT_UNIX" ] || { [ ! -f "$VPX_ROOT_UNIX/lib/vpx.lib" ] && [ ! -f "$VPX_ROOT_UNIX/lib/libvpx.lib" ] && [ ! -f "$VPX_ROOT_UNIX/lib/x64/vpxmd.lib" ]; }; then
+  echo "ERROR: libvpx not found. Build libvpx with MSVC and set VPX_ROOT (default: C:\\ff\\libvpx-msvc)."
+  exit 1
+fi
+VPX_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/libvpx-msvc/include"
+if [ -f "$VPX_ROOT_UNIX/lib/x64/vpxmd.lib" ]; then
+  VPX_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/libvpx-msvc/lib/x64"
+else
+  VPX_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/libvpx-msvc/lib"
+fi
+# Add vpx lib and required CRT/system libs for FFmpeg's check_lib tests
+# vpx.lib was built with /MD and needs msvcrt.lib, but FFmpeg's test doesn't link it automatically
+VPX_EXTRA_LIBS="vpx.lib"
 
 ./configure \
     --toolchain=msvc \
@@ -68,13 +101,15 @@ ZLIB_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/zlib-msvc/lib"
     --disable-shared \
     --disable-programs \
     --disable-x86asm \
+    --enable-libvpx \
     --enable-avformat \
     --enable-avcodec \
     --enable-avutil \
     --enable-swscale \
     --enable-swresample \
-    --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe,ogg \
-    --enable-decoder=h264,hevc,vp8,vp9,av1,hap,png,mjpeg,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,mp3,mp3float \
+    --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe,ogg,mp3 \
+    --disable-decoder=vp8,vp9 \
+    --enable-decoder=h264,hevc,libvpx_vp8,libvpx_vp9,av1,hap,prores,png,mjpeg,targa,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,mp3,mp3float \
     --enable-parser=h264,hevc,vp8,vp9,av1,vorbis,aac,mpegaudio \
     --enable-protocol=file,pipe \
     --enable-hwaccel=h264_d3d11va \
@@ -89,9 +124,12 @@ ZLIB_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/zlib-msvc/lib"
     --enable-hwaccel=av1_d3d11va2 \
     --enable-d3d11va \
     --enable-zlib \
+    --disable-vulkan \
+    --disable-libshaderc \
     --prefix="$target_prefix" \
-    --extra-cflags="/O2 $ZLIB_CFLAGS" \
-    --extra-ldflags="$ZLIB_LDFLAGS"
+    --extra-cflags="/O2 $ZLIB_CFLAGS $VPX_CFLAGS" \
+    --extra-ldflags="$ZLIB_LDFLAGS $VPX_LDFLAGS" \
+    --extra-libs="$VPX_EXTRA_LIBS"
 
 echo ""
 echo "Step 4: Building FFmpeg (static libs only)..."
@@ -115,9 +153,9 @@ echo "Copy artifacts to Unity project?"
 
 echo "  - Headers+libs -> $UNITY_PLUGIN_FFMPEG"
 
-echo "Run it now? (y/N)"
+echo "Run it now? (Y/n)"
 read -r RUN_COPY
-if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
+if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
     echo ""
     echo "Step 5: Copying headers and libs..."
     mkdir -p "$UNITY_PLUGIN_FFMPEG/include" "$UNITY_PLUGIN_FFMPEG/lib"
@@ -146,6 +184,31 @@ if [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
         echo "Note: zlib lib not found"
     fi
 
+    # Copy libvpx headers and libs
+    if [ -d "$VPX_ROOT_UNIX/include" ]; then
+        cp -R "$VPX_ROOT_UNIX/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
+    else
+        echo "Note: libvpx include not found"
+    fi
+    if [ -d "$VPX_ROOT_UNIX/lib" ]; then
+        cp -R "$VPX_ROOT_UNIX/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
+    else
+        echo "Note: libvpx lib not found"
+    fi
+
     echo ""
-    echo "✓ Copy complete (FFmpeg + zlib)"
+    echo "✓ Copy complete (FFmpeg + zlib + libvpx)"
+fi
+
+echo ""
+echo "Run AdPlayer plugin build script?"
+echo "  - $UNITY_PROJECT_ROOT/Plugin/Windows/build.sh"
+echo "Run it now? (Y/n)"
+read -r RUN_PLUGIN_BUILD
+if [ -z "$RUN_PLUGIN_BUILD" ] || [ "$RUN_PLUGIN_BUILD" = "y" ] || [ "$RUN_PLUGIN_BUILD" = "Y" ]; then
+    if [ -f "$UNITY_PROJECT_ROOT/Plugin/Windows/build.sh" ]; then
+        bash "$UNITY_PROJECT_ROOT/Plugin/Windows/build.sh"
+    else
+        echo "Note: build.sh not found at $UNITY_PROJECT_ROOT/Plugin/Windows/build.sh"
+    fi
 fi
