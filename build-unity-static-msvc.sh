@@ -91,6 +91,12 @@ fi
 # Add vpx lib for FFmpeg's check_lib tests
 VPX_EXTRA_LIBS="vpx.lib"
 
+# dav1d (fast AV1 decoder)
+# DAV1D_INSTALL="/c/ff/ff/build-unity-static-msvc/dav1d-msvc"
+# DAV1D_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/dav1d-msvc/include"
+# DAV1D_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/dav1d-msvc/lib"
+# DAV1D_EXTRA_LIBS="dav1d.lib"
+
 ./configure \
     --toolchain=msvc \
     --target-os=win64 \
@@ -196,7 +202,18 @@ if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
         echo "Note: libvpx lib not found"
     fi
 
-    echo ""
+    # Copy dav1d headers and libs
+    # if [ -d "$DAV1D_INSTALL/include" ]; then
+    #     cp -R "$DAV1D_INSTALL/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
+    # else
+    #     echo "Note: dav1d include not found"
+    # fi
+    # if [ -d "$DAV1D_INSTALL/lib" ]; then
+    #     cp -R "$DAV1D_INSTALL/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
+    # else
+    #     echo "Note: dav1d lib not found"
+    # fi
+
     echo ""
     echo "✓ Copy complete (FFmpeg + zlib + libvpx)"
 fi

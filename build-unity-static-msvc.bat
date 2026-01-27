@@ -37,6 +37,13 @@ set "MSVC_BIN_WIN=%VCToolsInstallDir%bin\Hostx64\x64"
 set "WINSDK_BIN_WIN=%WindowsSdkDir%bin\%WindowsSDKVersion%\x64"
 
 pushd "%FFMPEG_DIR%"
+rem echo Building dav1d...
+rem call "%FFMPEG_DIR%\build-dav1d-msvc.bat"
+rem if errorlevel 1 (
+rem   echo ERROR: dav1d build failed.
+rem   popd
+rem   exit /b 1
+rem )
 "%MSYS_BASH%" -lc "MSVC_BIN_WIN=\"%MSVC_BIN_WIN%\"; WINSDK_BIN_WIN=\"%WINSDK_BIN_WIN%\"; MSVC_BIN=\"$(cygpath -u \"$MSVC_BIN_WIN\")\"; WINSDK_BIN=\"$(cygpath -u \"$WINSDK_BIN_WIN\")\"; export PATH=\"$MSVC_BIN:$WINSDK_BIN:$PATH\"; export INCLUDE=\"$INCLUDE\"; export LIB=\"$LIB\"; cd /c/ff/ff && ./build-unity-static-msvc.sh"
 popd
 endlocal
