@@ -33,6 +33,15 @@ if not exist "%MSYS_BASH%" (
   exit /b 1
 )
 
+if not exist "%FFMPEG_DIR%\build-x264-msvc.bat" (
+  echo ERROR: build-x264-msvc.bat not found at %FFMPEG_DIR%\build-x264-msvc.bat
+  exit /b 1
+)
+if not exist "%FFMPEG_DIR%\build-x265-msvc.bat" (
+  echo ERROR: build-x265-msvc.bat not found at %FFMPEG_DIR%\build-x265-msvc.bat
+  exit /b 1
+)
+
 set "MSVC_BIN_WIN=%VCToolsInstallDir%bin\Hostx64\x64"
 set "WINSDK_BIN_WIN=%WindowsSdkDir%bin\%WindowsSDKVersion%\x64"
 
