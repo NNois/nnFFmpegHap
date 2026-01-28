@@ -108,11 +108,11 @@ echo "    - Shaderc (SPIR-V shader compiler)"
 echo ""
 echo ""
 echo "You can now build FFmpeg with:"
-echo "  ./build-shared.sh"
+echo "  ./build-msys-shared.sh"
 echo ""
 echo "Run it now? (Y/n)"
 read -r RUN_BUILD
 if [ -z "$RUN_BUILD" ] || [ "$RUN_BUILD" = "y" ] || [ "$RUN_BUILD" = "Y" ]; then
-    ./build-shared.sh
+    ./build-msys-shared.sh
 fi
 echo ""

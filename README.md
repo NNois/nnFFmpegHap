@@ -2,9 +2,9 @@
 
 ## Build quick start
 - Terminal: MSYS2 MINGW64.
-- Install deps: `./build-install-dependencies.sh`.
-- Build portable tools: `./build-static.sh` (bundles DLLs).
-- Copy with DLLs: `./build-copy-with-dlls.sh /c/path/to/app`.
+- Install deps: `./build-msys-install-dependencies.sh`.
+- Build portable tools: `./build-mysys-shared.sh` (bundles DLLs).
+- Copy with DLLs: `./ build-msys-copy-with-dlls.sh /c/path/to/app`.
 
 ## What changed
 - HAP: fixed HapQ YCoCg transform, added HapA (alpha-only), added HapR (BC7 modes 1/5/6/7), and rebuilt HapM (Hap Q Alpha) multi-texture/chunk headers to match the spec. Added `-bc7_uber` quality option for HapR.

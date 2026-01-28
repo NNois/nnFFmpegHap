@@ -1,0 +1,14 @@
+#!/bin/sh
+prefix="C:/ff/ff/build-msvc/sdl2-msvc"
+libdir="$prefix/lib"
+if [ -f "$libdir/SDL2-static.lib" ]; then
+  sdl2lib="SDL2-static.lib"
+else
+  sdl2lib="SDL2.lib"
+fi
+case "$1" in
+  --cflags) echo "-I${prefix}/include -I${prefix}/include/SDL2" ;;
+  --libs) echo "-LIBPATH:${libdir} ${sdl2lib} SDL2main.lib user32.lib gdi32.lib winmm.lib imm32.lib ole32.lib oleaut32.lib version.lib uuid.lib setupapi.lib" ;;
+  --version) echo "2.30.9" ;;
+  *) echo "usage: $0 [--cflags|--libs|--version]" ; exit 1 ;;
+esac
