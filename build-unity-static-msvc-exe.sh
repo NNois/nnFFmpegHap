@@ -40,38 +40,42 @@ make clean 2>/dev/null || true
 rm -f config.h config.log ffbuild/config.mak 2>/dev/null || true
 
 echo ""
-echo "Step 2: Cleaning and rebuilding zlib with MSVC..."
-# Always rebuild zlib to ensure fresh build with patches
-cmd.exe /c "C:\\ff\\ff\\build-zlib-msvc.bat"
+echo "Step 2: Checking pre-built dependencies..."
+# Dependencies should be pre-built manually using build-*-msvc.bat scripts
+
 ZLIB_INSTALL="/c/ff/ff/build-unity-static-msvc/zlib-msvc"
 if [ ! -f "$ZLIB_INSTALL/lib/zlib.lib" ] && [ ! -f "$ZLIB_INSTALL/lib/zlibstatic.lib" ]; then
-  echo "ERROR: zlib build failed"
+  echo "ERROR: zlib not found. Run build-zlib-msvc.bat first."
   exit 1
 fi
+echo "  zlib: OK"
 
-echo ""
-echo "Step 3: Cleaning and rebuilding libvpx with MSVC..."
-cmd.exe /c "C:\\ff\\ff\\build-libvpx-msvc.bat"
 VPX_INSTALL="/c/ff/ff/build-unity-static-msvc/libvpx-msvc"
-
-# Rename vpxmd.lib to vpx.lib for FFmpeg compatibility
+# Rename vpxmd.lib to vpx.lib for FFmpeg compatibility if needed
 if [ -f "$VPX_INSTALL/lib/x64/vpxmd.lib" ] && [ ! -f "$VPX_INSTALL/lib/x64/vpx.lib" ]; then
   echo "Copying vpxmd.lib to vpx.lib for FFmpeg detection..."
   cp "$VPX_INSTALL/lib/x64/vpxmd.lib" "$VPX_INSTALL/lib/x64/vpx.lib"
 fi
-
 if [ ! -f "$VPX_INSTALL/lib/x64/vpx.lib" ] && [ ! -f "$VPX_INSTALL/lib/vpx.lib" ] && [ ! -f "$VPX_INSTALL/lib/libvpx.lib" ]; then
-  echo "ERROR: libvpx build failed or vpx.lib not found"
+  echo "ERROR: libvpx not found. Run build-libvpx-msvc.bat first."
   exit 1
 fi
+echo "  libvpx: OK"
 
-echo ""
-echo "Step 4: Cleaning and rebuilding SDL2 with MSVC..."
-cmd.exe /c "C:\\ff\\ff\\build-sdl2-msvc.bat"
 SDL2_INSTALL="/c/ff/ff/build-unity-static-msvc/sdl2-msvc"
 if [ ! -f "$SDL2_INSTALL/lib/SDL2-static.lib" ] && [ ! -f "$SDL2_INSTALL/lib/SDL2.lib" ]; then
-  echo "ERROR: SDL2 build failed or SDL2 lib not found"
+  echo "ERROR: SDL2 not found. Run build-sdl2-msvc.bat first."
   exit 1
+fi
+echo "  SDL2: OK"
+
+DAV1D_INSTALL="/c/ff/ff/build-unity-static-msvc/dav1d-msvc"
+if [ ! -f "$DAV1D_INSTALL/lib/dav1d.lib" ]; then
+  echo "  dav1d: NOT FOUND (optional, run build-dav1d-msvc.bat to enable)"
+  DAV1D_ENABLED=0
+else
+  echo "  dav1d: OK"
+  DAV1D_ENABLED=1
 fi
 
 # Provide sdl2-config for FFmpeg configure (MSYS2 environment)
@@ -98,7 +102,7 @@ export PATH="$SDL2_INSTALL/bin:$PATH"
 export PKG_CONFIG_PATH="$SDL2_INSTALL/lib/pkgconfig:$PKG_CONFIG_PATH"
 
 echo ""
-echo "Step 5: Configuring minimal static build (MSVC toolchain)..."
+echo "Step 3: Configuring minimal static build (MSVC toolchain)..."
 
 target_prefix="./build-unity-static-msvc"
 
@@ -134,10 +138,16 @@ fi
 SDL2_EXTRA_LIBS="SDL2main.lib $SDL2_LIB_NAME user32.lib gdi32.lib winmm.lib imm32.lib ole32.lib oleaut32.lib version.lib uuid.lib setupapi.lib"
 
 # dav1d (fast AV1 decoder)
-# DAV1D_INSTALL="/c/ff/ff/build-unity-static-msvc/dav1d-msvc"
-# DAV1D_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/dav1d-msvc/include"
-# DAV1D_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/dav1d-msvc/lib"
-# DAV1D_EXTRA_LIBS="dav1d.lib"
+DAV1D_CFLAGS=""
+DAV1D_LDFLAGS=""
+DAV1D_EXTRA_LIBS=""
+DAV1D_CONFIGURE=""
+if [ "$DAV1D_ENABLED" = "1" ]; then
+  DAV1D_CFLAGS="-IC:/ff/ff/build-unity-static-msvc/dav1d-msvc/include"
+  DAV1D_LDFLAGS="-LIBPATH:C:/ff/ff/build-unity-static-msvc/dav1d-msvc/lib"
+  DAV1D_EXTRA_LIBS="dav1d.lib"
+  DAV1D_CONFIGURE="--enable-libdav1d"
+fi
 
 ./configure \
     --toolchain=msvc \
@@ -154,6 +164,7 @@ SDL2_EXTRA_LIBS="SDL2main.lib $SDL2_LIB_NAME user32.lib gdi32.lib winmm.lib imm3
     --disable-x86asm \
     --enable-gpl \
     --enable-libvpx \
+    $DAV1D_CONFIGURE \
     --enable-avformat \
     --enable-avcodec \
     --enable-avutil \
@@ -161,8 +172,9 @@ SDL2_EXTRA_LIBS="SDL2main.lib $SDL2_LIB_NAME user32.lib gdi32.lib winmm.lib imm3
     --enable-swresample \
     --enable-demuxer=mov,mp4,matroska,webm,image2,image2pipe,ogg,mp3 \
     --disable-decoder=vp8,vp9 \
-    --enable-decoder=h264,hevc,libvpx_vp8,libvpx_vp9,av1,hap,prores,png,mjpeg,targa,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,opus,mp3,mp3float \
+    --enable-decoder=h264,hevc,libvpx_vp8,libvpx_vp9,libdav1d,hap,prores,png,mjpeg,targa,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,aac,vorbis,opus,mp3,mp3float \
     --enable-parser=h264,hevc,vp8,vp9,av1,vorbis,opus,aac,mpegaudio \
+    --enable-filter=scale,pad,crop,format,aformat,aresample,buffer,buffersink,abuffer,abuffersink \
     --enable-protocol=file,pipe \
     --enable-hwaccel=h264_d3d11va \
     --enable-hwaccel=h264_d3d11va2 \
@@ -179,12 +191,12 @@ SDL2_EXTRA_LIBS="SDL2main.lib $SDL2_LIB_NAME user32.lib gdi32.lib winmm.lib imm3
     --disable-vulkan \
     --disable-libshaderc \
     --prefix="$target_prefix" \
-    --extra-cflags="/O2 $ZLIB_CFLAGS $VPX_CFLAGS $SDL2_CFLAGS" \
-    --extra-ldflags="$ZLIB_LDFLAGS $VPX_LDFLAGS $SDL2_LDFLAGS" \
-    --extra-libs="$VPX_EXTRA_LIBS $SDL2_EXTRA_LIBS"
+    --extra-cflags="/O2 $ZLIB_CFLAGS $VPX_CFLAGS $SDL2_CFLAGS $DAV1D_CFLAGS" \
+    --extra-ldflags="$ZLIB_LDFLAGS $VPX_LDFLAGS $SDL2_LDFLAGS $DAV1D_LDFLAGS" \
+    --extra-libs="$VPX_EXTRA_LIBS $SDL2_EXTRA_LIBS $DAV1D_EXTRA_LIBS"
 
 echo ""
-echo "Step 6: Building FFmpeg (static libs + tools)..."
+echo "Step 4: Building FFmpeg (static libs + tools)..."
 CPU_CORES=$(nproc)
 make -j"$CPU_CORES"
 make install
@@ -196,83 +208,11 @@ echo "=========================================="
 echo ""
 echo "Output: $target_prefix"
 echo ""
-
-UNITY_PROJECT_WIN="${UNITY_PROJECT_WIN:-J:\\2500_AdToolBox\\AdUnityPackages\\AdPlayer}"
-UNITY_PROJECT_ROOT="$(cygpath -u "$UNITY_PROJECT_WIN" 2>/dev/null || echo "/j/2500_AdToolBox/AdUnityPackages/AdPlayer")"
-UNITY_PLUGIN_FFMPEG="$UNITY_PROJECT_ROOT/Plugin/FFmpeg"
-
-echo "Copy artifacts to Unity project?"
-
-echo "  - Headers+libs -> $UNITY_PLUGIN_FFMPEG"
-
+echo "To copy artifacts to Unity, run:"
+echo "  ./build-unity-static-msvc-exe-copy.sh"
+echo ""
 echo "Run it now? (Y/n)"
 read -r RUN_COPY
 if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
-    echo ""
-echo "Step 7: Copying headers and libs..."
-    mkdir -p "$UNITY_PLUGIN_FFMPEG/include" "$UNITY_PLUGIN_FFMPEG/lib"
-
-    # Copy FFmpeg headers and libs
-    if [ -d "$target_prefix/include" ]; then
-        cp -R "$target_prefix/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
-    else
-        echo "Note: $target_prefix/include not found"
-    fi
-    if [ -d "$target_prefix/lib" ]; then
-        cp -R "$target_prefix/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
-    else
-        echo "Note: $target_prefix/lib not found"
-    fi
-
-    # Copy zlib headers and libs
-    if [ -d "$ZLIB_INSTALL/include" ]; then
-        cp -R "$ZLIB_INSTALL/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
-    else
-        echo "Note: zlib include not found"
-    fi
-    if [ -d "$ZLIB_INSTALL/lib" ]; then
-        cp -R "$ZLIB_INSTALL/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
-    else
-        echo "Note: zlib lib not found"
-    fi
-
-    # Copy libvpx headers and libs
-    if [ -d "$VPX_ROOT_UNIX/include" ]; then
-        cp -R "$VPX_ROOT_UNIX/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
-    else
-        echo "Note: libvpx include not found"
-    fi
-    if [ -d "$VPX_ROOT_UNIX/lib" ]; then
-        cp -R "$VPX_ROOT_UNIX/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
-    else
-        echo "Note: libvpx lib not found"
-    fi
-
-    # Copy dav1d headers and libs
-    # if [ -d "$DAV1D_INSTALL/include" ]; then
-    #     cp -R "$DAV1D_INSTALL/include/"* "$UNITY_PLUGIN_FFMPEG/include/"
-    # else
-    #     echo "Note: dav1d include not found"
-    # fi
-    # if [ -d "$DAV1D_INSTALL/lib" ]; then
-    #     cp -R "$DAV1D_INSTALL/lib/"* "$UNITY_PLUGIN_FFMPEG/lib/"
-    # else
-    #     echo "Note: dav1d lib not found"
-    # fi
-
-    echo ""
-    echo "✓ Copy complete (FFmpeg + zlib + libvpx)"
-fi
-
-echo ""
-echo "Run AdPlayer plugin build script?"
-echo "  - $UNITY_PROJECT_ROOT/Plugin/Windows/build.sh"
-echo "Run it now? (Y/n)"
-read -r RUN_PLUGIN_BUILD
-if [ -z "$RUN_PLUGIN_BUILD" ] || [ "$RUN_PLUGIN_BUILD" = "y" ] || [ "$RUN_PLUGIN_BUILD" = "Y" ]; then
-    if [ -f "$UNITY_PROJECT_ROOT/Plugin/Windows/build.sh" ]; then
-        bash "$UNITY_PROJECT_ROOT/Plugin/Windows/build.sh"
-    else
-        echo "Note: build.sh not found at $UNITY_PROJECT_ROOT/Plugin/Windows/build.sh"
-    fi
+    ./build-unity-static-msvc-exe-copy.sh
 fi

@@ -47,6 +47,7 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-libvpx \
     mingw-w64-x86_64-aom \
     mingw-w64-x86_64-svt-av1 \
+    mingw-w64-x86_64-dav1d \
     mingw-w64-x86_64-libvorbis \
     mingw-w64-x86_64-opus \
     mingw-w64-x86_64-lame \
@@ -88,6 +89,7 @@ echo "    - x265 (H.265 encoder)"
 echo "    - libvpx (VP8/VP9 encoder)"
 echo "    - libaom (AV1 reference encoder)"
 echo "    - SVT-AV1 (fast AV1 encoder)"
+echo "    - dav1d (fast AV1 decoder)"
 echo "    - libvorbis (Vorbis audio)"
 echo "    - Opus (Opus audio)"
 echo "    - LAME (MP3 encoder)"

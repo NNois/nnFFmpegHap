@@ -7,11 +7,9 @@ if not exist "%FFMPEG_DIR%" (
   exit /b 1
 )
 
-echo Cleaning %FFMPEG_DIR%\build-unity-static-msvc ...
-if exist "%FFMPEG_DIR%\build-unity-static-msvc" (
-  rd /s /q "%FFMPEG_DIR%\build-unity-static-msvc"
-)
-mkdir "%FFMPEG_DIR%\build-unity-static-msvc" >nul 2>&1
+rem Skip cleaning build-unity-static-msvc to preserve pre-built dependencies (zlib, vpx, sdl2, etc.)
+rem Run individual build-*-msvc.bat scripts manually if you need to rebuild them
+if not exist "%FFMPEG_DIR%\build-unity-static-msvc" mkdir "%FFMPEG_DIR%\build-unity-static-msvc" >nul 2>&1
 
 set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 if not exist "%VCVARS%" (

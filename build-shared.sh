@@ -40,7 +40,7 @@ echo ""
 echo "Step 2: Configuring build options (SHARED BUILD):"
 echo "  - Core: --enable-gpl --enable-version3 --enable-nonfree --disable-debug"
 echo "  - Link: --enable-shared --disable-static"
-echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libsvtav1 --enable-libzimg"
+echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libsvtav1 --enable-libdav1d --enable-libzimg"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
 echo "  - HAP: --enable-libsnappy $ISPCTEXCOMP_CONFIG"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
@@ -64,6 +64,7 @@ echo ""
     --enable-libvpx \
     --enable-libaom \
     --enable-libsvtav1 \
+    --enable-libdav1d \
     --enable-libvorbis \
     --enable-libopus \
     --enable-libmp3lame \

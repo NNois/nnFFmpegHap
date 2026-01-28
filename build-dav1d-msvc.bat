@@ -59,28 +59,28 @@ if not exist "%DAV1D_SRC%\dav1d-%DAV1D_VER%" (
 pushd "%DAV1D_SRC%\dav1d-%DAV1D_VER%"
 if exist "build-msvc" rd /s /q "build-msvc"
 
-set "CC=cl"
-set "CXX=cl"
-set "AR=lib"
-set "LD=link"
+rem Create meson native file to force MSVC toolchain
+echo [binaries] > msvc-native.ini
+echo c = 'cl' >> msvc-native.ini
+echo cpp = 'cl' >> msvc-native.ini
+echo ar = 'lib' >> msvc-native.ini
+echo [built-in options] >> msvc-native.ini
+echo c_args = ['/O2', '/DNDEBUG'] >> msvc-native.ini
+echo cpp_args = ['/O2', '/DNDEBUG'] >> msvc-native.ini
 
-meson setup build-msvc --prefix="%DAV1D_INSTALL%" --default-library=static --buildtype=release -Db_vscrt=mt || exit /b 1
+meson setup build-msvc --native-file=msvc-native.ini --prefix="%DAV1D_INSTALL%" --default-library=static --buildtype=release -Db_vscrt=mt || exit /b 1
 meson compile -C build-msvc || exit /b 1
 meson install -C build-msvc || exit /b 1
 
 popd
 
+rem dav1d with MSVC should produce dav1d.lib directly
+rem If libdav1d.a exists instead, the build used GCC - try to convert anyway
 if not exist "%DAV1D_INSTALL%\lib\dav1d.lib" (
   if exist "%DAV1D_INSTALL%\lib\libdav1d.a" (
-    echo dav1d.lib not found; converting libdav1d.a to dav1d.lib...
-    set "DAV1D_OBJ_DIR=%DAV1D_SRC%\dav1d-%DAV1D_VER%\build-msvc\dav1d-obj"
-    if exist "%DAV1D_OBJ_DIR%" rd /s /q "%DAV1D_OBJ_DIR%"
-    mkdir "%DAV1D_OBJ_DIR%"
-    for /f "usebackq delims=" %%i in (`"%MSYS_BASH%" -lc "cygpath -u '%DAV1D_OBJ_DIR%'"`) do set "DAV1D_OBJ_DIR_UNIX=%%i"
-    for /f "usebackq delims=" %%i in (`"%MSYS_BASH%" -lc "cygpath -u '%DAV1D_INSTALL%\\lib\\libdav1d.a'"`) do set "DAV1D_LIB_A_UNIX=%%i"
-    "%MSYS_BASH%" -lc "mkdir -p \"%DAV1D_OBJ_DIR_UNIX%\"; cd \"%DAV1D_OBJ_DIR_UNIX%\" && ar x \"%DAV1D_LIB_A_UNIX%\" && find . -name '*.obj' -o -name '*.o' -print | while read -r f; do cygpath -w \"$f\"; done > objs.rsp" || exit /b 1
-    lib.exe /nologo /OUT:"%DAV1D_INSTALL%\lib\dav1d.lib" @"%DAV1D_OBJ_DIR%\objs.rsp"
-    if errorlevel 1 exit /b 1
+    echo WARNING: libdav1d.a found instead of dav1d.lib - meson may have used GCC
+    echo Attempting to copy as dav1d.lib but this may not work with MSVC linker...
+    copy "%DAV1D_INSTALL%\lib\libdav1d.a" "%DAV1D_INSTALL%\lib\dav1d.lib"
   )
 )
 
