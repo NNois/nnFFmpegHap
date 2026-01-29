@@ -48,6 +48,28 @@ echo "  - Hardware Decode: --enable-d3d11va --enable-d3d12va"
 echo "  - CFLAGS: -O3 $ISPCTEXCOMP_CFLAGS"
 echo ""
 
+# Preflight: show which x265 will be used
+echo "Step 2.5: Preflight x265 check..."
+if command -v pkg-config >/dev/null 2>&1; then
+    if pkg-config --exists x265; then
+        echo "✓ pkg-config x265 version: $(pkg-config --modversion x265)"
+        echo "✓ pkg-config x265 libs: $(pkg-config --libs x265)"
+        echo "✓ pkg-config x265 cflags: $(pkg-config --cflags x265)"
+    else
+        echo "⚠️  pkg-config cannot find x265"
+    fi
+else
+    echo "⚠️  pkg-config not found"
+fi
+if command -v /mingw64/bin/x265 >/dev/null 2>&1; then
+    /mingw64/bin/x265 --help 2>/dev/null | grep -qi "alpha" \
+        && echo "✓ /mingw64/bin/x265 reports alpha support" \
+        || echo "⚠️  /mingw64/bin/x265 does not mention alpha"
+else
+    echo "⚠️  /mingw64/bin/x265 not found"
+fi
+echo ""
+
 # Note: Shared build is required so mpv can load custom FFmpeg codecs.
 ./configure \
     --enable-gpl \

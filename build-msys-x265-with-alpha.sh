@@ -4,6 +4,13 @@
 
 set -e
 
+LOG_FILE="${X265_BUILD_LOG:-/c/ff/ff/build-msys-x265-with-alpha.log}"
+: > "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "=========================================="
 echo "Building x265 with ALPHA SUPPORT"
 echo "=========================================="
@@ -30,38 +37,55 @@ fi
 cd "$X265_DIR/source"
 
 echo ""
-echo "Step 3: Patching CMakeLists.txt for modern CMake..."
-# Fix CMake compatibility issues - create a properly ordered CMakeLists.txt
-cat > CMakeLists.txt.new << 'CMAKEPATCH'
-# Minimum CMake version (must be first)
-cmake_minimum_required(VERSION 3.5)
+echo "Step 3: Restoring original CMakeLists.txt..."
+# Ensure we use the pristine CMakeLists to avoid broken patches
+if [ ! -f "$X265_TARBALL" ]; then
+    echo "Tarball missing, downloading ${X265_TARBALL}..."
+    curl -L -o "$X265_TARBALL" "$X265_URL"
+fi
+tar -xOf "$X265_TARBALL" "$X265_DIR/source/CMakeLists.txt" > CMakeLists.txt
+echo "✓ CMakeLists.txt restored"
 
-# Project declaration
-project(x265 C CXX)
+echo "Patching CMakeLists.txt for CMake 4.x..."
+# Force required policies to NEW and move cmake_minimum_required before project()
+sed -i 's/cmake_policy(SET CMP0025 OLD)/cmake_policy(SET CMP0025 NEW)/' CMakeLists.txt
+sed -i 's/cmake_policy(SET CMP0054 OLD)/cmake_policy(SET CMP0054 NEW)/' CMakeLists.txt
 
-# Remove old policy settings that are no longer supported
-# cmake_policy(SET CMP0025 OLD)
-# cmake_policy(SET CMP0054 OLD)
-
-CMAKEPATCH
-
-# Append the rest of the original file, skipping the old cmake_policy and cmake_minimum_required lines
-tail -n +20 CMakeLists.txt | grep -v "^cmake_policy(SET CMP0025" | grep -v "^cmake_policy(SET CMP0054" | grep -v "^cmake_minimum_required" | grep -v "^project(x265" >> CMakeLists.txt.new
-mv CMakeLists.txt.new CMakeLists.txt
+awk '
+BEGIN{min_done=0}
+/^cmake_minimum_required/ && !min_done {min_line=$0; min_done=1; next}
+/^project[[:space:]]*\(/ && min_done==0 {min_line="cmake_minimum_required (VERSION 2.8.8)"; min_done=1}
+/^project[[:space:]]*\(/ && min_done==1 {
+    print min_line
+    print
+    min_line=""
+    next
+}
+{print}
+END{if(min_line!="") print min_line}
+' CMakeLists.txt > CMakeLists.txt.tmp
+mv CMakeLists.txt.tmp CMakeLists.txt
 echo "✓ CMakeLists.txt patched"
 
 echo ""
 echo "Step 4: Configuring x265 with alpha support..."
 echo "  - HIGH_BIT_DEPTH=ON (10-bit and 12-bit support)"
+echo "  - ENABLE_ALPHA=ON (alpha layer support)"
 echo "  - ENABLE_SHARED=ON (shared library)"
 echo ""
+
+echo "Cleaning previous CMake cache..."
+rm -rf build
+rm -rf ../build
 
 mkdir -p build
 cd build
 
 cmake -G "MSYS Makefiles" \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DCMAKE_INSTALL_PREFIX=/mingw64 \
     -DENABLE_SHARED=ON \
+    -DENABLE_ALPHA=ON \
     -DHIGH_BIT_DEPTH=ON \
     ..
 
@@ -74,6 +98,19 @@ make -j$CPU_CORES
 echo ""
 echo "Step 6: Installing x265 to /mingw64..."
 make install
+
+echo ""
+echo "Step 7: Quick alpha capability check..."
+if command -v /mingw64/bin/x265 >/dev/null 2>&1; then
+    /mingw64/bin/x265 --version || true
+    if /mingw64/bin/x265 --help 2>/dev/null | grep -qi "alpha"; then
+        echo "✓ x265 help mentions alpha support"
+    else
+        echo "⚠️  x265 help does not mention alpha (not definitive)"
+    fi
+else
+    echo "⚠️  /mingw64/bin/x265 not found, skipping alpha check"
+fi
 
 echo ""
 echo "=========================================="
