@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta id="bb-bootstrap" data-current-user="{&quot;isAuthenticated&quot;: false, &quot;isKbdShortcutsEnabled&quot;: true, &quot;isSshEnabled&quot;: false}"
+
+
+    data-target-workspace-uuid="253ebee4-fecd-4a36-9baa-74b18f234a44"
+ />
+  <script nonce="ehk37vkEUjK01NE37qmmYg==">
+
+if (window.performance) {
+
+  
+  window.performance.okayToSendMetrics = !document.hidden && 'onvisibilitychange' in document;
+
+  if (window.performance.okayToSendMetrics) {
+
+    
+    window.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        window.performance.okayToSendMetrics = false;
+      }
+    });
+  }
+
+  
+  
+}
+</script>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <title>404 &mdash; Bitbucket</title>
+  
+
+
+<meta name="bb-env" content="production" />
+<meta id="bb-canon-url" name="bb-canon-url" content="https://bitbucket.org">
+<meta name="bb-api-canon-url" content="https://api.bitbucket.org">
+
+
+
+<meta name="bitbucket-commit-hash" content="5a13f69f0ff2">
+<meta name="bb-app-node" content="6f70add158bb">
+<meta name="bb-dce-env" content="micros">
+<meta name="bb-view-name" content="bitbucket.apps.downloads.views.download_file">
+<meta name="ignore-whitespace" content="False">
+<meta name="tab-size" content="None">
+<meta name="locale" content="en">
+<meta name="application-name" content="Bitbucket">
+<meta name="apple-mobile-web-app-title" content="Bitbucket">
+<meta name="slack-app-id" content="A8W8QLZD1">
+<meta name="statuspage-api-host" content="https://bqlf8qjztdtr.statuspage.io">
+
+
+<meta name="theme-color" content="#0049B0">
+<meta name="msapplication-TileColor" content="#0052CC">
+<meta name="msapplication-TileImage" content="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/img/logos/bitbucket/mstile-150x150.png">
+<link rel="apple-touch-icon" sizes="180x180" type="image/png" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/img/logos/bitbucket/apple-touch-icon.png">
+<link rel="icon" sizes="192x192" type="image/png" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/img/logos/bitbucket/android-chrome-192x192.png">
+
+<link rel="icon" sizes="16x16 24x24 32x32 64x64" type="image/x-icon" href="/favicon.ico?v=2">
+<link rel="mask-icon" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/img/logos/bitbucket/safari-pinned-tab.svg" color="#0052CC">
+
+<link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="Bitbucket">
+
+  <meta name="description" content="">
+  
+  <link
+  rel="preconnect"
+  href="https://ds-cdn.prod-east.frontend.public.atl-paas.net" />
+<link
+  rel="preload"
+  href="https://ds-cdn.prod-east.frontend.public.atl-paas.net/assets/fonts/atlassian-sans/v4/AtlassianSans-latin.woff2"
+  as="font" type="font/woff2" crossorigin />
+<link
+  rel="preload stylesheet"
+  href="https://ds-cdn.prod-east.frontend.public.atl-paas.net/assets/font-rules/v6/atlassian-fonts.css"
+  as="style" crossorigin />
+<script nonce="ehk37vkEUjK01NE37qmmYg==">
+  window.__theme_settings__ = {"typographyTheme": "typography-refreshed"};
+</script>
+<script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/theme-init.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+  
+    
+
+
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/entry/vendor-aui-8.css" />
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/entry/app.css" />
+
+
+
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/themes/atlaskit-tokens-light-brand-refresh.css">
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/themes/atlaskit-tokens-dark-brand-refresh.css">
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/themes/atlaskit-tokens-spacing.css">
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/themes/atlaskit-tokens-typography-refreshed.css">
+
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/entry/adg3-skeleton-nav.css">
+<link rel="stylesheet" href="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/css/entry/adg3.css">
+  
+  <script nonce="ehk37vkEUjK01NE37qmmYg==">
+  window.__sentry__ = {"dsn": "https://ea49358f525d4019945839a3d7a8292a@o55978.ingest.sentry.io/159509", "release": "20260128.175270", "environment": "production", "tags": {"dc_location": "Micros-3", "micros_deployment_id": "orr1s7r4e8ru9bte", "micros_service": "bbc-website", "micros_envtype": "prod", "micros_service_version": "175270", "micros_instance_id": "i-075ac289651466abf", "micros_zone": "us-east-1.prod.atl-paas.net", "revision": "5a13f69f0ff2"}};
+</script>
+<script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/sentry.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+  <script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/early.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+  
+  
+
+  
+</head>
+<body
+    class="production adg3 aui-8 aui-legacy-focus "
+    data-static-url="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/"
+data-base-url="https://bitbucket.org"
+data-no-avatar-image="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/img/default_avatar/user_blue.svg"
+data-current-user="{&quot;isAuthenticated&quot;: false, &quot;isKbdShortcutsEnabled&quot;: true, &quot;isSshEnabled&quot;: false}"
+data-atlassian-id="{&quot;loginUrl&quot;: &quot;https://id.atlassian.com/login?prompt=login&amp;continue=https%3A%2F%2Fbitbucket.org%2Fmulticoreware%2Fx265_git%2Fdownloads%2F3.6.tar.gz&quot;, &quot;loginStatusUrl&quot;: &quot;https://id.atlassian.com/profile/rest/profile&quot;}"
+data-settings="{&quot;MENTIONS_MIN_QUERY_LENGTH&quot;: 1}"
+data-switch-create-pullrequest-commit-status="true"
+
+data-current-repo="{&quot;id&quot;: 60887286, &quot;uuid&quot;: &quot;c105f477-2003-4e12-80e5-06858cf7e40b&quot;, &quot;scm&quot;: &quot;git&quot;, &quot;readOnly&quot;: false, &quot;language&quot;: &quot;c++&quot;, &quot;pygmentsLanguage&quot;: &quot;c++&quot;, &quot;slug&quot;: &quot;x265_git&quot;, &quot;fullslug&quot;: &quot;multicoreware/x265_git&quot;, &quot;baseUrl&quot;: &quot;multicoreware&quot;, &quot;owner&quot;: {&quot;uuid&quot;: &quot;253ebee4-fecd-4a36-9baa-74b18f234a44&quot;, &quot;username&quot;: &quot;multicoreware&quot;, &quot;isTeam&quot;: true}, &quot;workspace&quot;: {&quot;uuid&quot;: &quot;253ebee4-fecd-4a36-9baa-74b18f234a44&quot;, &quot;slug&quot;: &quot;multicoreware&quot;}, &quot;is_private&quot;: false, &quot;mainbranch&quot;: {&quot;name&quot;: &quot;master&quot;}, &quot;analyticsKey&quot;: &quot;UA-42233890-2&quot;}"
+
+
+
+
+
+
+
+
+
+
+>
+<div id="page">
+  
+    <div id="adg3-banner-root"></div>
+
+    <div id="wrapper">
+      
+  
+
+<div id="account-warning" data-module="header/account-warning"
+  data-unconfirmed-addresses="false"
+  data-no-addresses="false"
+  
+></div>
+
+
+
+      
+  
+<header id="aui-message-bar">
+  
+</header>
+
+
+      <div id="content" role="main">
+        
+          <header class="app-header">
+              <div class="app-header--primary">
+                
+                  <div class="app-header--context">
+                    
+                    <div class="app-header--breadcrumbs">
+                      
+                    </div>
+                      
+                  </div>
+                
+             </div>
+             <div class="app-header--secondary">
+                <h1 class="app-header--heading">
+                  
+                </h1>
+               
+                 
+               
+             </div>
+          </header>
+        
+        
+        
+  <div class="aui-page-panel aui-page-panel-no-header">
+    <div class="aui-page-panel-inner">
+      <div id="error" class="404 aui-page-panel-content">
+        <span class="icon icon-404"></span>
+        <h1>Resource not found</h1>
+        <p>
+          
+            Return to the <a href="#" onclick="window.history.back();return false;">previous page</a> or
+            go back to your <a target="_top" href="/">dashboard</a>.
+          
+        </p>
+          <p><a class="aui-button aui-button-primary" href="/account/signin/?next=%2Fmulticoreware%2Fx265_git%2Fdownloads%2F3.6.tar.gz" style="min-width:10em">Log in</a></p>
+      </div>
+    </div>
+  </div>
+
+      </div>
+    </div>
+  
+  <div id="adg3-flag-root"></div>
+  <div id="tos-modal"></div>
+</div>
+
+<div id="adg3-dialog"></div>
+
+
+  
+
+<div data-module="components/mentions/index">
+  
+    
+  
+    
+  
+    
+</div>
+<div data-module="components/typeahead/emoji/index">
+  
+    
+</div>
+
+    
+
+
+
+
+
+  <div class="_mustache-templates">
+    
+      <script id="mention-result" type="text/html">
+        
+[[! Escaping can be disabled (with "&") for these template vars because they're manually escaped in the various consumers ]]
+<span class="mention-result">
+  <span class="aui-avatar aui-avatar-small mention-result--avatar">
+    <span class="aui-avatar-inner">
+      <img src="[[avatar_url]]">
+    </span>
+  </span>
+  [[#display_name]]
+    [[#has_distinct_display_name]]
+      [[#nickname]]
+        <span class="display-name mention-result--display-name">[[&display_name]]</span> 
+        <span class="username mention-result--secondary-name mention-result--username">([[&nickname]])</span>
+      [[/nickname]]
+      [[^nickname]]
+        <span class="display-name mention-result--display-name">[[&display_name]]</span> 
+        <span class="username mention-result--secondary-name mention-result--username">([[&mention_id]])</span>
+      [[/nickname]]
+    [[/has_distinct_display_name]]
+    [[^has_distinct_display_name]]
+      <span class="display-name mention-result--display-name distinct">[[&display_name]]</span>
+    [[/has_distinct_display_name]]
+  [[/display_name]]
+  [[^display_name]]
+    [[#nickname]]
+      <span class="username mention-result--username">[[&nickname]]</span>
+    [[/nickname]]
+    [[^nickname]]
+      <span class="username mention-result--username">[[&mention_id]]</span>
+    [[/nickname]]
+  [[/display_name]]
+  [[#is_teammate]][[^is_team]]
+    <span class="aui-lozenge aui-lozenge-complete aui-lozenge-subtle mention-result--lozenge">teammate</span>
+  [[/is_team]][[/is_teammate]]
+</span>
+
+      </script>
+    
+      <script id="mention-call-to-action" type="text/html">
+        
+[[^query]]
+<li class="bb-typeahead-item">Begin typing to search for a user</li>
+[[/query]]
+[[#query]]
+<li class="bb-typeahead-item">Continue typing to search for a user</li>
+[[/query]]
+
+      </script>
+    
+      <script id="mention-no-results" type="text/html">
+        
+[[^searching]]
+<li class="bb-typeahead-item">Found no matching users for <em>[[query]]</em>.</li>
+[[/searching]]
+[[#searching]]
+<li class="bb-typeahead-item bb-typeahead-searching">Searching for <em>[[query]]</em>.</li>
+[[/searching]]
+
+      </script>
+    
+      <script id="emoji-result" type="text/html">
+        
+<span class="emoji-result">
+  <span class="emoji-result--avatar">
+    <img class="emoji" src="[[src]]">
+  </span>
+  <span class="name emoji-result--name">[[&name]]</span>
+</span>
+
+      </script>
+    
+      <script id="scope-list-template" type="text/html">
+        <ul class="scope-list">
+  [[#scopes]]
+    <li class="scope-list--item">[[description]]</li>
+  [[/scopes]]
+</ul>
+
+      </script>
+    
+  </div>
+
+
+
+  
+
+<script nonce="ehk37vkEUjK01NE37qmmYg==">
+  window.__initial_state__ = {"global": {"geoip_country": null, "is_mobile_user_agent": false, "site_message": "", "needs_marketing_consent": false, "marketing_consent_locale": null, "whats_new_feed": "https://atlassianblog.wpengine.com/wp-json/wp/v2/posts?tags=11972&context=embed&per_page=6&orderby=date&order=desc", "locale": "en", "path": "/multicoreware/x265_git/downloads/3.6.tar.gz", "isFocusedTask": true, "focusedTaskBackButtonUrl": null, "features": {"lookup-pr-approvers-from-prs": true, "log-asap-errors": true, "provisioning-install-pipelines-addon": true, "fd-prs-client-cache-fallback": true, "read-only-message-migrations": true, "provisioning-skip-workspace-creation": true, "uninstall-dvcs-addon-only-when-jira-is-removed": true, "auth-flow-adg3": true, "workspace-member-set-last-accessed": true, "use-elasticache-lsn-storage": true, "whitelisted_throttle_exemption": true, "bbc-pride-logo": false, "create-workspace-show-recaptcha": true, "spa-account-settings--settings-index": true, "platform-team25-app-icon-tiles": false, "lazy-diffstat": false, "bbc-rovo-data-onboarding-ux": true, "pipelines-test-management": true, "bbc-merge-queue-enabled": false, "bbc_nav_v4": false, "use-new-connect-modules-endpoint": true, "scope-development-mode-on": false, "scope-jira-connections-created-at": false, "workspace-ai-enabled": false, "workspace-settings-ai-editor-features-enabled": false, "workspace-settings-ai-rovo-chat-enabled": false, "pr-code-push-webhook": false, "custom-merge-checks-activated": false, "pr-review-groups": false, "bbc-packages-maven-npm-registry-ui": false}, "isNavigationOpen": true, "flags": [], "horizontalNavigationItems": {"mainItems": [{"id": "pullrequests-tab", "label": "Pull requests", "tab_name": "pullrequests", "anchor": true, "weight": 140, "is_premium": null, "is_beta": null, "is_new": null, "url": "/multicoreware/workspace/pull-requests/", "target": "_self", "icon_class": "", "badge_label": null, "matching_url_prefixes": [], "analytics_label": "pullrequests", "analytics_payload": {}, "is_client_link": true, "is_external_link": false, "is_dropdown_item": false, "test_id": null, "children": [], "type": "menu_item", "icon": ""}, {"id": "repositories-tab", "label": "Repositories", "tab_name": "repositories", "anchor": true, "weight": 160, "is_premium": null, "is_beta": null, "is_new": null, "url": "/multicoreware/workspace/repositories/", "target": "_self", "icon_class": "", "badge_label": null, "matching_url_prefixes": [], "analytics_label": "repositories", "analytics_payload": {}, "is_client_link": true, "is_external_link": false, "is_dropdown_item": true, "test_id": null, "children": [], "type": "menu_item", "icon": ""}, {"id": "projects-tab", "label": "Projects", "tab_name": "projects", "anchor": true, "weight": 200, "is_premium": null, "is_beta": null, "is_new": null, "url": "/multicoreware/workspace/projects/", "target": "_self", "icon_class": "", "badge_label": null, "matching_url_prefixes": [], "analytics_label": "projects", "analytics_payload": {}, "is_client_link": true, "is_external_link": false, "is_dropdown_item": true, "test_id": null, "children": [], "type": "menu_item", "icon": ""}], "secondaryItems": [], "settingsItems": []}, "targetUser": {"display_name": "MulticoreWare", "links": {"self": {"href": "https://bitbucket.org/!api/2.0/workspaces/%7B253ebee4-fecd-4a36-9baa-74b18f234a44%7D"}, "avatar": {"href": "https://bitbucket.org/account/multicoreware/avatar/"}, "html": {"href": "https://bitbucket.org/%7B253ebee4-fecd-4a36-9baa-74b18f234a44%7D/"}}, "created_on": "2011-04-28T03:51:23.600991+00:00", "is_active": true, "type": "team", "uuid": "{253ebee4-fecd-4a36-9baa-74b18f234a44}", "has_2fa_enabled": null, "properties": {}, "username": "multicoreware"}, "targetFeatures": {"lookup-pr-approvers-from-prs": true, "log-asap-errors": true, "provisioning-install-pipelines-addon": true, "fd-prs-client-cache-fallback": true, "view-source-filtering-upon-timeout": true, "read-only-message-migrations": true, "provisioning-skip-workspace-creation": true, "fd-repository-page-loading-error-guard": true, "uninstall-dvcs-addon-only-when-jira-is-removed": true, "auth-flow-adg3": true, "workspace-member-set-last-accessed": true, "use-elasticache-lsn-storage": true, "whitelisted_throttle_exemption": true, "atlassian-editor": true}}, "section": {"repository": {"cloneProtocol": "https", "currentRepository": {"type": "repository", "full_name": "multicoreware/x265_git", "links": {"self": {"href": "https://bitbucket.org/!api/2.0/repositories/multicoreware/x265_git"}, "html": {"href": "https://bitbucket.org/multicoreware/x265_git"}, "avatar": {"href": "https://bytebucket.org/ravatar/%7Bc105f477-2003-4e12-80e5-06858cf7e40b%7D?ts=2419879"}, "clone": [{"name": "https", "href": "https://bitbucket.org/multicoreware/x265_git.git"}, {"name": "ssh", "href": "git@bitbucket.org:multicoreware/x265_git.git"}]}, "name": "x265_git", "slug": "x265_git", "description": "Open Source H.265 / HEVC video encoder", "scm": "git", "website": "http://x265.org/", "owner": {"display_name": "MulticoreWare", "links": {"self": {"href": "https://bitbucket.org/!api/2.0/workspaces/%7B253ebee4-fecd-4a36-9baa-74b18f234a44%7D"}, "avatar": {"href": "https://bitbucket.org/account/multicoreware/avatar/"}, "html": {"href": "https://bitbucket.org/%7B253ebee4-fecd-4a36-9baa-74b18f234a44%7D/"}}, "type": "team", "uuid": "{253ebee4-fecd-4a36-9baa-74b18f234a44}", "username": "multicoreware"}, "workspace": {"type": "workspace", "uuid": "{253ebee4-fecd-4a36-9baa-74b18f234a44}", "name": "MulticoreWare", "slug": "multicoreware", "is_private": false, "is_privacy_enforced": false, "links": {"avatar": {"href": "https://bitbucket.org/workspaces/multicoreware/avatar/?ts=1767690514"}, "html": {"href": "https://bitbucket.org/multicoreware/"}, "self": {"href": "https://bitbucket.org/!api/2.0/workspaces/multicoreware"}}, "created_on": "2018-11-29T02:57:33.196859+00:00", "forking_mode": "allow_forks"}, "is_private": false, "project": {"type": "project", "owner": {"display_name": "MulticoreWare", "links": {"self": {"href": "https://bitbucket.org/!api/2.0/workspaces/%7B253ebee4-fecd-4a36-9baa-74b18f234a44%7D"}, "avatar": {"href": "https://bitbucket.org/account/multicoreware/avatar/"}, "html": {"href": "https://bitbucket.org/%7B253ebee4-fecd-4a36-9baa-74b18f234a44%7D/"}}, "type": "team", "uuid": "{253ebee4-fecd-4a36-9baa-74b18f234a44}", "username": "multicoreware"}, "workspace": {"type": "workspace", "uuid": "{253ebee4-fecd-4a36-9baa-74b18f234a44}", "name": "MulticoreWare", "slug": "multicoreware", "links": {"avatar": {"href": "https://bitbucket.org/workspaces/multicoreware/avatar/?ts=1767690514"}, "html": {"href": "https://bitbucket.org/multicoreware/"}, "self": {"href": "https://bitbucket.org/!api/2.0/workspaces/multicoreware"}}}, "key": "PROJ", "uuid": "{798baa50-1038-43b7-b455-13d062633e9a}", "is_private": false, "name": "mcw", "description": "Project created by Bitbucket for MulticoreWare", "links": {"self": {"href": "https://bitbucket.org/!api/2.0/workspaces/multicoreware/projects/PROJ"}, "html": {"href": "https://bitbucket.org/multicoreware/workspace/projects/PROJ"}, "avatar": {"href": "https://bitbucket.org/multicoreware/workspace/projects/PROJ/avatar/32?ts=1453652848"}}, "created_on": "2015-11-13T19:42:50.831055+00:00", "updated_on": "2016-01-24T16:27:28.811014+00:00", "has_publicly_visible_repos": true}, "fork_policy": "allow_forks", "updated_on": "2026-01-26T13:41:05.871420+00:00", "language": "c++", "uuid": "{c105f477-2003-4e12-80e5-06858cf7e40b}", "mainbranch": {"name": "master"}, "state": "available", "landing_page": "wiki"}, "mirrors": [], "sizeLimits": {"hard": 4294967296, "soft": 2147483648.0, "readOnly": 10737418240.0}, "override_settings": {"default_merge_strategy": false, "branching_model": false}}}};
+  window.__settings__ = {"ADMINHUB_BASE_URL": "https://admin.atlassian.com", "API_CANON_URL": "https://api.bitbucket.org", "CANON_URL": "https://bitbucket.org", "LOGIN_URL": "/account/signin/", "SOCIAL_AUTH_ATLASSIANID_LOGIN_PROMPT_URL": "https://id.atlassian.com/login", "SOCIAL_AUTH_ATLASSIANID_LOGOUT_URL": "https://id.atlassian.com/logout", "SOCIAL_AUTH_ATLASSIANID_PROFILE_URL": "https://id.atlassian.com/manage-profile/", "ATLASSIANID_LOGIN_URL": "https://id.atlassian.com/login", "ATLASSIANID_LOGOUT_URL": "https://id.atlassian.com/logout", "ATLASSIANID_MANAGE_PROFILE_URL": "https://id.atlassian.com/manage-profile/", "MARKETPLACE_TERMS_OF_USE_URL": null, "CONSENT_HUB_FRONTEND_BASE_URL": "https://preferences.atlassian.com", "EMOJI_STANDARD_BASE_URL": "https://bitbucket.org/gateway/api/emoji/", "STATUSPAGE_URL": "https://bitbucket.status.atlassian.com/", "RECAPTCHA_PUBLIC_KEY": "6LcRaMMkAAAAAFB-7L-4-1-mdLIrOMAP4H5asuWK", "WAC_CREATE_WORKSPACE_URL": "https://www.atlassian.com/try/cloud/signup?bundle=bitbucket", "ATLASSIAN_PUBSUB_CONNECT_URL": "https://bitbucket.org/gateway/api/bbc-aps/subscriptions", "AGG_WEBSOCKET_SUBSCRIPTIONS_PATH": "/gateway/api/graphql/subscriptions"};
+  window.__webpack_nonce__ = 'ehk37vkEUjK01NE37qmmYg==';
+</script>
+
+<script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/jsi18n/en/djangojs.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+
+  <script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/locales/en.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+
+<script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/aui-8.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+<script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/vendor.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+<script src="https://bbc-object-storage--frontbucket.us-east-1.prod.public.atl-paas.net/5a13f69f0ff2/dist/webpack/app.js" nonce="ehk37vkEUjK01NE37qmmYg=="></script>
+
+
+</body>
+</html>
