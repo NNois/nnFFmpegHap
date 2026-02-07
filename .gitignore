@@ -29,6 +29,7 @@
 *_g
 \#*
 .\#*
+nul
 /.config
 /.version
 /build/
