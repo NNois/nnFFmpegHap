@@ -99,7 +99,7 @@ esac
 EOF
 chmod +x "$SDL2_CONFIG_BIN"
 export PATH="$SDL2_INSTALL/bin:$PATH"
-export PKG_CONFIG_PATH="$SDL2_INSTALL/lib/pkgconfig:$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="$DAV1D_INSTALL/lib/pkgconfig:$SDL2_INSTALL/lib/pkgconfig:$PKG_CONFIG_PATH"
 
 echo ""
 echo "Step 3: Configuring minimal static build (MSVC toolchain)..."
@@ -145,7 +145,8 @@ DAV1D_CONFIGURE=""
 if [ "$DAV1D_ENABLED" = "1" ]; then
   DAV1D_CFLAGS="-IC:/ff/ff/build-msvc/dav1d-msvc/include"
   DAV1D_LDFLAGS="-LIBPATH:C:/ff/ff/build-msvc/dav1d-msvc/lib"
-  DAV1D_EXTRA_LIBS="dav1d.lib"
+  # dav1d.lib needs msvcrt.lib for CRT functions when built with /MD
+  DAV1D_EXTRA_LIBS="dav1d.lib msvcrt.lib"
   DAV1D_CONFIGURE="--enable-libdav1d"
 fi
 

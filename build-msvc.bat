@@ -16,7 +16,7 @@ if not exist "%VCVARS%" (
   echo ERROR: vcvars64.bat not found at %VCVARS%
   echo Please adjust the path to your Visual Studio installation.
   exit /b 1
-)
+) 
 
 call "%VCVARS%"
 if errorlevel 1 (
@@ -42,6 +42,6 @@ rem   echo ERROR: dav1d build failed.
 rem   popd
 rem   exit /b 1
 rem )
-"%MSYS_BASH%" -lc "MSVC_BIN_WIN=\"%MSVC_BIN_WIN%\"; WINSDK_BIN_WIN=\"%WINSDK_BIN_WIN%\"; MSVC_BIN=\"$(cygpath -u \"$MSVC_BIN_WIN\")\"; WINSDK_BIN=\"$(cygpath -u \"$WINSDK_BIN_WIN\")\"; export PATH=\"$MSVC_BIN:$WINSDK_BIN:$PATH\"; export INCLUDE=\"$INCLUDE\"; export LIB=\"$LIB\"; cd /c/ff/ff && ./build-msvc.sh"
+"%MSYS_BASH%" -lc "MSVC_BIN_WIN=\"%MSVC_BIN_WIN%\"; WINSDK_BIN_WIN=\"%WINSDK_BIN_WIN%\"; MSVC_BIN=\"$(cygpath -u \"$MSVC_BIN_WIN\")\"; WINSDK_BIN=\"$(cygpath -u \"$WINSDK_BIN_WIN\")\"; export PATH=\"$MSVC_BIN:$WINSDK_BIN:/mingw64/bin:$PATH\"; export INCLUDE=\"$INCLUDE\"; export LIB=\"$LIB\"; cd /c/ff/ff && ./build-msvc.sh"
 popd
 endlocal

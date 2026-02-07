@@ -32,8 +32,7 @@
 /.config
 /.version
 /build/
-/build-unity-static/
-/build-unity-static-msvc/
+/build-msvc/
 /build-*.log
 /ffmpeg
 /ffplay

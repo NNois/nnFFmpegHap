@@ -11,7 +11,7 @@ set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary
 if not exist "%VCVARS%" (
   echo ERROR: vcvars64.bat not found at %VCVARS%
   exit /b 1
-)
+) 
 
 call "%VCVARS%"
 if errorlevel 1 (
@@ -59,16 +59,26 @@ if not exist "%DAV1D_SRC%\dav1d-%DAV1D_VER%" (
 pushd "%DAV1D_SRC%\dav1d-%DAV1D_VER%"
 if exist "build-msvc" rd /s /q "build-msvc"
 
-rem Create meson native file to force MSVC toolchain
-echo [binaries] > msvc-native.ini
-echo c = 'cl' >> msvc-native.ini
-echo cpp = 'cl' >> msvc-native.ini
-echo ar = 'lib' >> msvc-native.ini
-echo [built-in options] >> msvc-native.ini
-echo c_args = ['/O2', '/DNDEBUG'] >> msvc-native.ini
-echo cpp_args = ['/O2', '/DNDEBUG'] >> msvc-native.ini
+rem Get full paths to MSVC tools to avoid MSYS2 interference
+set "CL_PATH=%VCToolsInstallDir%bin\Hostx64\x64\cl.exe"
+set "LIB_PATH=%VCToolsInstallDir%bin\Hostx64\x64\lib.exe"
 
-meson setup build-msvc --native-file=msvc-native.ini --prefix="%DAV1D_INSTALL%" --default-library=static --buildtype=release -Db_vscrt=mt || exit /b 1
+rem Create meson native file to force MSVC toolchain with full paths
+echo [binaries] > msvc-native.ini
+echo c = '%CL_PATH:\=\\%' >> msvc-native.ini
+echo cpp = '%CL_PATH:\=\\%' >> msvc-native.ini
+echo ar = '%LIB_PATH:\=\\%' >> msvc-native.ini
+echo lib = '%LIB_PATH:\=\\%' >> msvc-native.ini
+echo [built-in options] >> msvc-native.ini
+echo c_args = ['/O2', '/MD', '/DNDEBUG', '/DDAV1D_BUILDING_DLL=0'] >> msvc-native.ini
+echo cpp_args = ['/O2', '/MD', '/DNDEBUG', '/DDAV1D_BUILDING_DLL=0'] >> msvc-native.ini
+
+echo.
+echo Meson native file contents:
+type msvc-native.ini
+echo.
+
+meson setup build-msvc --native-file=msvc-native.ini --prefix="%DAV1D_INSTALL%" --default-library=static --buildtype=release -Db_vscrt=md || exit /b 1
 meson compile -C build-msvc || exit /b 1
 meson install -C build-msvc || exit /b 1
 

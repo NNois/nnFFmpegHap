@@ -51,7 +51,7 @@ echo Configuring SDL2 with CMake (MSVC)...
 cmake -S "%SDL2_SRC%\SDL2-%SDL2_VER%" -B "%SDL2_BUILD%" -G "Visual Studio 17 2022" -A x64 ^
   -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST=OFF ^
   -DCMAKE_INSTALL_PREFIX="%SDL2_INSTALL%" ^
-  -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded || exit /b 1
+  -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL || exit /b 1
 
 echo Building and installing SDL2...
 cmake --build "%SDL2_BUILD%" --config Release --target install || exit /b 1
