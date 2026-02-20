@@ -5,7 +5,7 @@
 
 set -e
 
-LOG_FILE="${FFMPEG_BUILD_LOG:-build-shared.log}"
+LOG_FILE="${FFMPEG_BUILD_LOG:-build-msys-shared.log}"
 : > "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
