@@ -45,15 +45,11 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "bc7enc.h"
+#include "basisu_wrapper.h"
 #include "codec_internal.h"
 #include "encode.h"
 #include "hap.h"
 #include "texturedsp.h"
-
-#if CONFIG_LIBISPC_TEXCOMP
-#include "ispc_texcomp.h"
-#endif
 
 #define HAP_MAX_CHUNKS 64
 
@@ -100,7 +96,6 @@ static int hap_get_supported_config(const AVCodecContext *avctx,
     return ff_default_get_supported_config(avctx, codec, config, flags, out, out_num);
 }
 
-#if CONFIG_LIBISPC_TEXCOMP
 static uint16_t hap_bc6h_float_to_half(float v)
 {
     static Float2HalfTables f2h_tables;
@@ -202,58 +197,23 @@ static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
     return 0;
 }
 
-static int hap_bc6h_quality_index(int quality)
-{
-    if (quality < 0)
-        return 0;
-    if (quality > 4)
-        return 4;
-    return quality;
-}
-
 static const char *hap_bc6h_profile_name(int quality)
 {
-    switch (hap_bc6h_quality_index(quality)) {
-    case 4:
-        return "veryslow";
-    case 3:
-        return "slow";
-    case 2:
-        return "basic";
-    case 1:
-        return "fast";
-    default:
-        return "veryfast";
+    if (quality < 0) quality = 0;
+    if (quality > 4) quality = 4;
+    switch (quality) {
+    case 4:  return "best";
+    case 3:  return "slow";
+    case 2:  return "normal";
+    case 1:  return "fast";
+    default: return "fastest";
     }
 }
 
-static void hap_bc6h_profile_for_quality(int quality, bc6h_enc_settings *settings)
-{
-    switch (hap_bc6h_quality_index(quality)) {
-    case 4:
-        GetProfile_bc6h_veryslow(settings);
-        break;
-    case 3:
-        GetProfile_bc6h_slow(settings);
-        break;
-    case 2:
-        GetProfile_bc6h_basic(settings);
-        break;
-    case 1:
-        GetProfile_bc6h_fast(settings);
-        break;
-    default:
-        GetProfile_bc6h_veryfast(settings);
-        break;
-    }
-}
-
-static int hap_bc6h_compress_ispc(AVCodecContext *avctx, uint8_t *out,
-                                  int out_length, const AVFrame *frame)
+static int hap_bc6h_compress_basisu(AVCodecContext *avctx, uint8_t *out,
+                                    int out_length, const AVFrame *frame)
 {
     HapContext *ctx = avctx->priv_data;
-    bc6h_enc_settings settings;
-    rgba_surface src;
     int ret;
 
     if (ctx->tex_size > out_length)
@@ -263,18 +223,16 @@ static int hap_bc6h_compress_ispc(AVCodecContext *avctx, uint8_t *out,
     if (ret < 0)
         return ret;
 
-    hap_bc6h_profile_for_quality(ctx->opt_bc6_quality, &settings);
-
-    src.ptr = ctx->bc6h_rgba_u16;
-    src.width = avctx->width;
-    src.height = avctx->height;
-    src.stride = avctx->width * 4 * sizeof(uint16_t);
-
-    CompressBlocksBC6H(&src, out, &settings);
+    ret = basisu_bc6h_compress_frame(out, ctx->bc6h_rgba_u16,
+                                     avctx->width, avctx->height,
+                                     ctx->opt_bc6_quality);
+    if (ret < 0) {
+        av_log(avctx, AV_LOG_ERROR, "basis_universal BC6H encoding failed\n");
+        return AVERROR_EXTERNAL;
+    }
 
     return 0;
 }
-#endif
 
 static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length, const AVFrame *f)
 {
@@ -309,17 +267,9 @@ static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length,
         ctx->tex_size_alpha = tex_size_alpha;
     } else {
         /* Single texture encoding */
-#if CONFIG_LIBISPC_TEXCOMP
         if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
-            return hap_bc6h_compress_ispc(avctx, out, out_length, f);
+            return hap_bc6h_compress_basisu(avctx, out, out_length, f);
         }
-#else
-        if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
-            av_log(avctx, AV_LOG_ERROR,
-                   "Hap H requires --enable-libispc_texcomp.\n");
-            return AVERROR(ENOSYS);
-        }
-#endif
 
         if (ctx->tex_size > out_length)
             return AVERROR_BUFFER_TOO_SMALL;
@@ -687,18 +637,17 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->enc[0].tex_funct = dxtc.dxt1_block;
         break;
     case HAP_FMT_BPTC: {
-        BC7EncContext bc7;
-        ff_bc7enc_init(&bc7, BC7ENC_TRUE, BC7ENC_MAX_PARTITIONS1, ctx->opt_bc7_quality,
-                       BC7ENC_TRUE, BC7ENC_TRUE);
+        basisu_init();
+        basisu_bc7_set_quality(ctx->opt_bc7_quality);
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
         avctx->bits_per_coded_sample = 32;
-        ctx->enc[0].tex_funct = bc7.bc7enc_block;
+        ctx->enc[0].tex_funct = basisu_bc7_encode_block;
         break;
     }
     case HAP_FMT_BPTC_UF: {
-#if CONFIG_LIBISPC_TEXCOMP
-        av_log(avctx, AV_LOG_INFO, "Hap H profile: %s\n",
+        basisu_init();
+        av_log(avctx, AV_LOG_INFO, "Hap H profile: %s (basis_universal)\n",
                hap_bc6h_profile_name(ctx->opt_bc6_quality));
 
         ctx->enc[0].tex_ratio = 16;
@@ -709,11 +658,6 @@ static av_cold int hap_init(AVCodecContext *avctx)
         avctx->bits_per_coded_sample = 48;
         ctx->enc[0].tex_funct = NULL;
         break;
-#else
-        av_log(avctx, AV_LOG_ERROR,
-               "Hap H requires --enable-libispc_texcomp.\n");
-        return AVERROR(ENOSYS);
-#endif
     }
     case HAP_FMT_RGBADXT5:
         ctx->enc[0].tex_ratio = 16;
@@ -828,7 +772,7 @@ static const AVOption options[] = {
         { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
-    { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BC7ENC_MAX_UBER_LEVEL, FLAGS },
+    { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BASISU_BC7_QUALITY_MAX, FLAGS },
     { "bc6_quality", "BC6 quality level (Hap H only, 0-4)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 4, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },

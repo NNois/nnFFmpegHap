@@ -11,17 +11,19 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
 FFMPEG_BIN="$FFMPEG_PREFIX/bin"
-ISPCTEXCOMP_ROOT="${ISPCTEXCOMP_ROOT:-$PWD/thirdparty/ISPCTextureCompressor}"
-ISPCTEXCOMP_CONFIG=""
-ISPCTEXCOMP_CFLAGS=""
-ISPCTEXCOMP_LDFLAGS=""
+BASISU_ROOT="${BASISU_ROOT:-$PWD/thirdparty/basis_universal}"
+BASISU_CFLAGS=""
+BASISU_LDFLAGS=""
+BASISU_LIBS=""
 
-if [ -f "$ISPCTEXCOMP_ROOT/ispc_texcomp/ispc_texcomp.h" ]; then
-    ISPCTEXCOMP_CONFIG="--enable-libispc_texcomp"
-    ISPCTEXCOMP_CFLAGS="-I$ISPCTEXCOMP_ROOT/ispc_texcomp"
-    ISPCTEXCOMP_LDFLAGS="-L$ISPCTEXCOMP_ROOT/lib"
+if [ -f "$BASISU_ROOT/build_mingw/libbasisu_encoder.a" ]; then
+    BASISU_CFLAGS="-I$BASISU_ROOT/encoder -I$BASISU_ROOT/transcoder -I$BASISU_ROOT"
+    BASISU_LDFLAGS="-L$BASISU_ROOT/build_mingw"
+    BASISU_LIBS="-lbasisu_encoder -lstdc++ -lpthread"
+    echo "basis_universal found: $BASISU_ROOT/build_mingw/libbasisu_encoder.a"
 else
-    echo "Note: ISPCTextureCompressor not found at $ISPCTEXCOMP_ROOT; Hap H ISPC path disabled."
+    echo "ERROR: basis_universal not built. Run thirdparty/basis_universal/build-basisu.sh first."
+    exit 1
 fi
 
 echo "=========================================="
@@ -42,10 +44,10 @@ echo "  - Core: --enable-gpl --enable-version3 --enable-nonfree --disable-debug"
 echo "  - Link: --enable-shared --disable-static"
 echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libsvtav1 --enable-libdav1d --enable-libzimg"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
-echo "  - HAP: --enable-libsnappy $ISPCTEXCOMP_CONFIG"
+echo "  - HAP: --enable-libsnappy + basis_universal (BC7/BC6H static link)"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
 echo "  - Hardware Decode: --enable-d3d11va --enable-d3d12va"
-echo "  - CFLAGS: -O3 $ISPCTEXCOMP_CFLAGS"
+echo "  - CFLAGS: -O3 $BASISU_CFLAGS"
 echo ""
 
 # Preflight: show which x265 will be used
@@ -96,9 +98,9 @@ echo ""
     --enable-libshaderc \
     --enable-d3d11va \
     --enable-d3d12va \
-    $ISPCTEXCOMP_CONFIG \
-    --extra-cflags="-O3 $ISPCTEXCOMP_CFLAGS" \
-    --extra-ldflags="$ISPCTEXCOMP_LDFLAGS"
+    --extra-cflags="-O3 $BASISU_CFLAGS" \
+    --extra-ldflags="$BASISU_LDFLAGS" \
+    --extra-libs="$BASISU_LIBS"
 
 echo ""
 echo "Step 3: Verifying HAP is enabled..."
@@ -116,13 +118,7 @@ echo "Step 5: Installing to $FFMPEG_PREFIX..."
 make install
 
 echo ""
-echo "Step 6: Copying ISPCTextureCompressor runtime assets..."
-ISPCTEXCOMP_LIB_DIR="$ISPCTEXCOMP_ROOT/lib"
-if [ -f "$ISPCTEXCOMP_LIB_DIR/ispc_texcomp.dll" ]; then
-    cp -v "$ISPCTEXCOMP_LIB_DIR/ispc_texcomp.dll" "$FFMPEG_BIN/"
-else
-    echo "Note: ispc_texcomp.dll not found in $ISPCTEXCOMP_LIB_DIR"
-fi
+echo "Step 6: basis_universal is statically linked, no runtime DLL needed."
 
 echo ""
 echo "=========================================="
@@ -132,6 +128,8 @@ echo ""
 echo "FFmpeg - Alternative Development Edition"
 echo "Build type: SHARED DLLs (bundle required)"
 echo "Build features:"
+echo "  - Hap R support (FourCC: 'Hap7') - BC7 via basis_universal"
+echo "  - Hap H support (FourCC: 'HapH') - BC6H via basis_universal"
 echo "  - HapM support (FourCC: 'HapM')"
 echo "  - HapA support (FourCC: 'HapA')"
 echo "  - Fixed YCoCg color transform"

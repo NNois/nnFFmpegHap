@@ -34,6 +34,9 @@ nul
 /.version
 /build/
 /build-msvc/
+/thirdparty/basis_universal/build_mingw/
+/thirdparty/basis_universal/build/
+/thirdparty/ISPCTextureCompressor/lib/
 /build-*.log
 /ffmpeg
 /ffplay
