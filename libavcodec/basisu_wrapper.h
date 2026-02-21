@@ -50,6 +50,12 @@ void basisu_init(void);
 void basisu_bc7_set_quality(int quality);
 
 /**
+ * Set BC6H quality level (0=fastest, 4=best).
+ * Affects subsequent calls to basisu_bc6h_encode_block().
+ */
+void basisu_bc6h_set_quality(int quality);
+
+/**
  * Encode a single 4x4 RGBA8 block to BC7.
  * Compatible with FFmpeg's texturedsp block function signature.
  *
@@ -61,17 +67,16 @@ void basisu_bc7_set_quality(int quality);
 int basisu_bc7_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
 
 /**
- * Compress an entire frame to BC6H using ASTC HDR 4x4 -> BC6H transcode.
+ * Encode a single 4x4 RGBA half-float block to BC6H (unsigned).
+ * Compatible with FFmpeg's texturedsp block function signature.
+ * Uses the bc6hf analytical real-time encoder from basis_universal.
  *
- * @param out       Output buffer (must be at least (w/4)*(h/4)*16 bytes)
- * @param rgba_u16  Input: RGBA half-float pixels (4 x uint16_t per pixel, tightly packed)
- * @param width     Image width (must be multiple of 4)
- * @param height    Image height (must be multiple of 4)
- * @param quality   Quality level 0-4 (0=fastest, 4=best)
- * @return 0 on success, negative on error
+ * @param dst    Output: 16 bytes of BC6H compressed data
+ * @param stride Stride of the source image in bytes (half-float RGBA = 8 bytes/pixel)
+ * @param block  Input: pointer to top-left pixel of 4x4 block (RGBA16 half-float, 8 bytes/pixel)
+ * @return 0 on success
  */
-int basisu_bc6h_compress_frame(uint8_t *out, const uint8_t *rgba_u16,
-                               int width, int height, int quality);
+int basisu_bc6h_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
 
 #ifdef __cplusplus
 }

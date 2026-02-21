@@ -210,30 +210,6 @@ static const char *hap_bc6h_profile_name(int quality)
     }
 }
 
-static int hap_bc6h_compress_basisu(AVCodecContext *avctx, uint8_t *out,
-                                    int out_length, const AVFrame *frame)
-{
-    HapContext *ctx = avctx->priv_data;
-    int ret;
-
-    if (ctx->tex_size > out_length)
-        return AVERROR_BUFFER_TOO_SMALL;
-
-    ret = hap_bc6h_prepare_rgba64(ctx, frame);
-    if (ret < 0)
-        return ret;
-
-    ret = basisu_bc6h_compress_frame(out, ctx->bc6h_rgba_u16,
-                                     avctx->width, avctx->height,
-                                     ctx->opt_bc6_quality);
-    if (ret < 0) {
-        av_log(avctx, AV_LOG_ERROR, "basis_universal BC6H encoding failed\n");
-        return AVERROR_EXTERNAL;
-    }
-
-    return 0;
-}
-
 static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length, const AVFrame *f)
 {
     HapContext *ctx = avctx->priv_data;
@@ -266,17 +242,21 @@ static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length,
 
         ctx->tex_size_alpha = tex_size_alpha;
     } else {
-        /* Single texture encoding */
-        if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
-            return hap_bc6h_compress_basisu(avctx, out, out_length, f);
-        }
-
         if (ctx->tex_size > out_length)
             return AVERROR_BUFFER_TOO_SMALL;
 
         ctx->enc[0].tex_data.out = out;
-        ctx->enc[0].frame_data.in = f->data[0];
-        ctx->enc[0].stride = f->linesize[0];
+        if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
+            /* BC6H: use the pre-converted RGBA half-float buffer */
+            int ret = hap_bc6h_prepare_rgba64(ctx, f);
+            if (ret < 0)
+                return ret;
+            ctx->enc[0].frame_data.in = ctx->bc6h_rgba_u16;
+            ctx->enc[0].stride = avctx->width * 8; /* 4 x uint16_t = 8 bytes/pixel */
+        } else {
+            ctx->enc[0].frame_data.in = f->data[0];
+            ctx->enc[0].stride = f->linesize[0];
+        }
         ctx->enc[0].width  = avctx->width;
         ctx->enc[0].height = avctx->height;
         ff_texturedsp_exec_compress_threads(avctx, &ctx->enc[0]);
@@ -647,16 +627,15 @@ static av_cold int hap_init(AVCodecContext *avctx)
     }
     case HAP_FMT_BPTC_UF: {
         basisu_init();
-        av_log(avctx, AV_LOG_INFO, "Hap H profile: %s (basis_universal)\n",
+        basisu_bc6h_set_quality(ctx->opt_bc6_quality);
+        av_log(avctx, AV_LOG_INFO, "Hap H profile: %s (basis_universal bc6hf)\n",
                hap_bc6h_profile_name(ctx->opt_bc6_quality));
 
         ctx->enc[0].tex_ratio = 16;
-        ctx->enc[0].raw_ratio = (avctx->pix_fmt == AV_PIX_FMT_RGBF16 ||
-                                 avctx->pix_fmt == AV_PIX_FMT_RGBF16LE ||
-                                 avctx->pix_fmt == AV_PIX_FMT_RGBF16BE) ? 24 : 32;
+        ctx->enc[0].raw_ratio = 32; /* RGBA half-float = 4 x uint16 = 8 bytes/pixel, 4 pixels wide = 32 */
         avctx->codec_tag = MKTAG('H', 'a', 'p', 'H');
         avctx->bits_per_coded_sample = 48;
-        ctx->enc[0].tex_funct = NULL;
+        ctx->enc[0].tex_funct = basisu_bc6h_encode_block;
         break;
     }
     case HAP_FMT_RGBADXT5:
@@ -772,7 +751,7 @@ static const AVOption options[] = {
         { "hap_q",     "Hap Q (DXT5-YCoCg textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_YCOCGDXT5 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_a",     "Hap Alpha-Only (RGTC1 textures)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_RGTC1 }, 0, 0, FLAGS, .unit = "format" },
         { "hap_m",     "Hap M (DXT5-YCoCg + RGTC1 alpha)", 0, AV_OPT_TYPE_CONST, { .i64 = HAP_FMT_HAPM }, 0, 0, FLAGS, .unit = "format" },
-    { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, BASISU_BC7_QUALITY_MAX, FLAGS },
+    { "bc7_quality", "BC7 quality level (Hap R only)", OFFSET(opt_bc7_quality), AV_OPT_TYPE_INT, { .i64 = 3 }, 0, BASISU_BC7_QUALITY_MAX, FLAGS },
     { "bc6_quality", "BC6 quality level (Hap H only, 0-4)", OFFSET(opt_bc6_quality), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 4, FLAGS },
     { "chunks", "chunk count", OFFSET(opt_chunk_count), AV_OPT_TYPE_INT, {.i64 = 1 }, 1, HAP_MAX_CHUNKS, FLAGS, },
     { "compressor", "second-stage compressor", OFFSET(opt_compressor), AV_OPT_TYPE_INT, { .i64 = HAP_COMP_SNAPPY }, HAP_COMP_NONE, HAP_COMP_SNAPPY, FLAGS, .unit = "compressor" },
