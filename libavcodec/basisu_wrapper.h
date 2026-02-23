@@ -94,6 +94,31 @@ int basisu_bc7_encode_block_rgba(uint8_t *dst, ptrdiff_t stride, const uint8_t *
  */
 int basisu_bc6h_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
 
+/**
+ * Decode a single 16-byte BC7 block to 4x4 RGBA8 pixels.
+ * Uses basis_universal's unpack_bc7 (supports all modes 0-7).
+ * Compatible with FFmpeg's texturedsp block function signature.
+ *
+ * @param dst    Output: 4x4 RGBA8 pixels written row by row with stride
+ * @param stride Stride of the destination image in bytes
+ * @param block  Input: 16 bytes of BC7 compressed data
+ * @return 16 (bytes of compressed data consumed)
+ */
+int basisu_bc7_decode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+
+/**
+ * Decode a single 16-byte BC6H block to 4x4 RGB half-float pixels.
+ * Uses basis_universal's unpack_bc6h (supports all BC6H modes).
+ * Compatible with FFmpeg's texturedsp block function signature.
+ *
+ * @param dst    Output: 4x4 RGB16F pixels written row by row with stride (3 x uint16 per pixel)
+ * @param stride Stride of the destination image in bytes
+ * @param block  Input: 16 bytes of BC6H compressed data
+ * @return 16 (bytes of compressed data consumed)
+ */
+int basisu_bc6h_decode_block_u(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+int basisu_bc6h_decode_block_s(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+
 #ifdef __cplusplus
 }
 #endif

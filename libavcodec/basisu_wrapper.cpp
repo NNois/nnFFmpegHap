@@ -25,6 +25,7 @@
 /* basis_universal headers */
 #include "basisu_enc.h"
 #include "basisu_bc7enc.h"
+#include "basisu_gpu_texture.h"
 #include "basisu_transcoder_internal.h"
 #include "basisu_astc_hdr_core.h"
 
@@ -192,6 +193,63 @@ int basisu_bc6h_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *bloc
     memcpy(dst, bc6h_blk.m_bytes, 16);
 
     return 0;
+}
+
+int basisu_bc7_decode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    basist::color_rgba pixels[16];
+
+    if (!basist::bc7u::unpack_bc7(block, pixels)) {
+        memset(pixels, 0, sizeof(pixels));
+    }
+
+    for (int y = 0; y < 4; y++) {
+        uint8_t *row = dst + y * stride;
+        for (int x = 0; x < 4; x++) {
+            row[x * 4 + 0] = pixels[y * 4 + x].r;
+            row[x * 4 + 1] = pixels[y * 4 + x].g;
+            row[x * 4 + 2] = pixels[y * 4 + x].b;
+            row[x * 4 + 3] = pixels[y * 4 + x].a;
+        }
+    }
+
+    return 16;
+}
+
+static int basisu_bc6h_decode_block_impl(uint8_t *dst, ptrdiff_t stride, const uint8_t *block, bool is_signed)
+{
+    /*
+     * unpack_bc6h outputs 4x4 RGB half-floats with configurable pitch.
+     * Default pitch is 4*3=12 halfs per row. We write directly into dst
+     * which has 3 halfs (6 bytes) per pixel, so pitch = stride/2 in halfs.
+     */
+    basist::half_float rgb_half[4 * 4 * 3];
+
+    if (!basisu::unpack_bc6h(block, rgb_half, is_signed, 4 * 3)) {
+        memset(rgb_half, 0, sizeof(rgb_half));
+    }
+
+    for (int y = 0; y < 4; y++) {
+        uint16_t *row = (uint16_t *)(dst + y * stride);
+        const basist::half_float *src = rgb_half + y * 4 * 3;
+        for (int x = 0; x < 4; x++) {
+            row[x * 3 + 0] = src[x * 3 + 0];
+            row[x * 3 + 1] = src[x * 3 + 1];
+            row[x * 3 + 2] = src[x * 3 + 2];
+        }
+    }
+
+    return 16;
+}
+
+int basisu_bc6h_decode_block_u(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    return basisu_bc6h_decode_block_impl(dst, stride, block, false);
+}
+
+int basisu_bc6h_decode_block_s(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    return basisu_bc6h_decode_block_impl(dst, stride, block, true);
 }
 
 } /* extern "C" */
