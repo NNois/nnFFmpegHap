@@ -38,7 +38,6 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "basisu_wrapper.h"
 #include "bc6dec.h"
 #include "bc7dec.h"
 #include "codec_internal.h"
@@ -295,7 +294,7 @@ static int hap_decode(AVCodecContext *avctx, AVFrame *frame,
 
         if (avctx->codec_tag == MKTAG('H','a','p','H')) {
             ctx->dec[t].tex_funct = (tex_format == HAP_FMT_BPTC_SF) ?
-                                    basisu_bc6h_decode_block_s : basisu_bc6h_decode_block_u;
+                                    ff_bc6dec_block_s : ff_bc6dec_block_u;
         }
 
         if (ctx->tex_size != (avctx->coded_width  / TEXTURE_BLOCK_W)
@@ -403,7 +402,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
     case MKTAG('H','a','p','7'):
         texture_name = "BC7";
         ctx->dec[0].tex_ratio = 16;
-        ctx->dec[0].tex_funct = basisu_bc7_decode_block;
+        ctx->dec[0].tex_funct = ff_bc7dec_block;
         avctx->pix_fmt = AV_PIX_FMT_RGBA;
         break;
     case MKTAG('H','a','p','H'):
