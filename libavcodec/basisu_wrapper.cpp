@@ -92,6 +92,34 @@ int basisu_bc7_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block
     return 0;
 }
 
+int basisu_bc7_encode_block_rgba(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    basist::color_rgba pixels[16];
+
+    for (int y = 0; y < 4; y++) {
+        const uint8_t *row = block + y * stride;
+        for (int x = 0; x < 4; x++) {
+            pixels[y * 4 + x].r = row[x * 4 + 0];
+            pixels[y * 4 + x].g = row[x * 4 + 1];
+            pixels[y * 4 + x].b = row[x * 4 + 2];
+            pixels[y * 4 + x].a = row[x * 4 + 3];
+        }
+    }
+
+    /*
+     * Force RGBA path: never fall back to RGB-only modes.
+     * fast_pack_bc7_auto_rgba checks if all alpha==255 and routes to
+     * fast_pack_bc7_rgb_analytical, which uses modes that don't store alpha.
+     * For content with alpha gradients, we must always use the RGBA encoder.
+     */
+    if (g_bc7_flags & basist::bc7f::cPackBC7FlagPartiallyAnalyticalRGBA)
+        basist::bc7f::fast_pack_bc7_rgba_partial_analytical(dst, pixels, g_bc7_flags);
+    else
+        basist::bc7f::fast_pack_bc7_rgba_analytical(dst, pixels, g_bc7_flags);
+
+    return 0;
+}
+
 void basisu_bc6h_set_quality(int quality)
 {
     if (quality < BASISU_BC6H_QUALITY_MIN)

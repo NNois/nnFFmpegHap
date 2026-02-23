@@ -622,7 +622,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
         avctx->bits_per_coded_sample = 32;
-        ctx->enc[0].tex_funct = basisu_bc7_encode_block;
+        ctx->enc[0].tex_funct = basisu_bc7_encode_block_rgba;
         break;
     }
     case HAP_FMT_BPTC_UF: {

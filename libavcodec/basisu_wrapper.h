@@ -56,7 +56,10 @@ void basisu_bc7_set_quality(int quality);
 void basisu_bc6h_set_quality(int quality);
 
 /**
- * Encode a single 4x4 RGBA8 block to BC7.
+ * Encode a single 4x4 RGBA8 block to BC7 (auto RGB/RGBA detection).
+ * Uses fast_pack_bc7_auto_rgba: if all 16 pixels have alpha==255,
+ * uses the faster RGB-only path (decoded alpha will be 255).
+ * Use basisu_bc7_encode_block_rgba for content with alpha gradients.
  * Compatible with FFmpeg's texturedsp block function signature.
  *
  * @param dst    Output: 16 bytes of BC7 compressed data
@@ -65,6 +68,19 @@ void basisu_bc6h_set_quality(int quality);
  * @return 0 on success
  */
 int basisu_bc7_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
+
+/**
+ * Encode a single 4x4 RGBA8 block to BC7 (forced RGBA path).
+ * Always uses the RGBA encoder, preserving alpha channel faithfully.
+ * Use this for content with alpha (transparency gradients, etc.).
+ * Compatible with FFmpeg's texturedsp block function signature.
+ *
+ * @param dst    Output: 16 bytes of BC7 compressed data
+ * @param stride Stride of the source image in bytes
+ * @param block  Input: pointer to top-left pixel of 4x4 block (RGBA8, 4 bytes/pixel)
+ * @return 0 on success
+ */
+int basisu_bc7_encode_block_rgba(uint8_t *dst, ptrdiff_t stride, const uint8_t *block);
 
 /**
  * Encode a single 4x4 RGBA half-float block to BC6H (unsigned).
