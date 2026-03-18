@@ -25,10 +25,13 @@
 #include "libavutil/emms.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/internal.h"
+#include "libavutil/mem.h"
+#include "libavutil/mem_internal.h"
 #include "avcodec.h"
 #include "blockdsp.h"
 #include "codec_internal.h"
 #include "copy_block.h"
+#include "decode.h"
 #include "mathops.h"
 #include "vlc.h"
 
@@ -36,7 +39,10 @@
 #include "get_bits.h"
 #include "unary.h"
 
-#define BINK_FLAG_ALPHA 0x00100000
+#define BINK_FLAG_ALPHA   0x00100000
+#define BINKVER25         0x00040000  ///< bink 2.5+ (wider inter DC range)
+#define BINKCONSTANTA     0x00080000  ///< constant alpha in frame_flags bits 24-31
+#define BINKCONSTANTAMASK 0xFF000000
 #define DC_MPRED(A, B, C) FFMIN(FFMAX((C) + (B) - (A), FFMIN3(A, B, C)), FFMAX3(A, B, C))
 #define DC_MPRED2(A, B) FFMIN(FFMAX((A), (B)), FFMAX(FFMIN((A), (B)), 2 * (A) - (B)))
 
@@ -119,12 +125,14 @@ typedef struct Bink2Context {
     uint8_t         *row_cbp;
 
     int             num_slices;
-    int             slice_height[4];
+    int             slice_height[8];
 
     int             comp;
     int             mb_pos;
     unsigned        flags;
     unsigned        frame_flags;
+    int             is_ver25;       ///< version >= 2.5 (wider inter DC range)
+    int             constant_alpha; ///< -1 if not constant, 0-255 if constant
 } Bink2Context;
 
 /**
@@ -260,6 +268,14 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
     c->frame_flags = AV_RL32(pkt->data);
     ff_dlog(avctx, "frame flags %X\n", c->frame_flags);
 
+    c->is_ver25 = !!(c->frame_flags & BINKVER25);
+
+    /* BINKCONSTANTA: alpha is a constant value stored in bits 24-31 of frame_flags */
+    c->constant_alpha = -1;
+    if ((c->frame_flags & BINKCONSTANTA) && c->has_alpha) {
+        c->constant_alpha = (c->frame_flags & BINKCONSTANTAMASK) >> 24;
+    }
+
     if ((ret = init_get_bits8(gb, pkt->data, pkt->size)) < 0)
         return ret;
 
@@ -323,7 +339,17 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
         dst[3] = frame->data[3] + c->slice_height[i]   * stride[3];
     }
 
-    frame->key_frame = is_kf;
+    /* Fill constant alpha plane if BINKCONSTANTA is set */
+    if (c->constant_alpha >= 0 && frame->data[3]) {
+        for (int y = 0; y < avctx->height; y++)
+            memset(frame->data[3] + y * frame->linesize[3],
+                   c->constant_alpha, avctx->width);
+    }
+
+    if (is_kf)
+        frame->flags |= AV_FRAME_FLAG_KEY;
+    else
+        frame->flags &= ~AV_FRAME_FLAG_KEY;
     frame->pict_type = is_kf ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_P;
 
     av_frame_unref(c->last);

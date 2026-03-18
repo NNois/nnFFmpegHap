@@ -104,9 +104,9 @@ echo ""
 
 echo ""
 echo "Step 3: Verifying HAP and Bink2 are enabled..."
-grep "CONFIG_HAP_ENCODER" config.h && echo "✓ HAP encoder enabled" || echo "✗ HAP encoder NOT enabled"
-grep "CONFIG_HAP_DECODER" config.h && echo "✓ HAP decoder enabled" || echo "✗ HAP decoder NOT enabled"
-grep "CONFIG_BINK2_DECODER" config.h && echo "✓ Bink2 decoder enabled" || echo "✗ Bink2 decoder NOT enabled"
+grep -q "CONFIG_HAP_ENCODER=yes" ffbuild/config.mak && echo "✓ HAP encoder enabled" || echo "✗ HAP encoder NOT enabled"
+grep -q "CONFIG_HAP_DECODER=yes" ffbuild/config.mak && echo "✓ HAP decoder enabled" || echo "✗ HAP decoder NOT enabled"
+grep -q "CONFIG_BINK2_DECODER=yes" ffbuild/config.mak && echo "✓ Bink2 decoder enabled" || echo "✗ Bink2 decoder NOT enabled"
 
 echo ""
 echo "Step 4: Building FFmpeg..."

@@ -701,7 +701,7 @@ static int bink2g_decode_inter_luma(Bink2Context *c,
 
     *prev_cbp = cbp = bink2g_decode_cbp_luma(c, gb, *prev_cbp);
 
-    bink2g_decode_dc(c, gb, dc, 1, q, -1023, 1023, 0xA8);
+    bink2g_decode_dc(c, gb, dc, 1, q, c->is_ver25 ? -2047 : -1023, c->is_ver25 ? 2047 : 1023, 0xA8);
 
     for (int i = 0; i < 4; i++) {
         ret = bink2g_decode_ac(gb, bink2g_scan, block, cbp >> (4 * i),
@@ -732,7 +732,7 @@ static int bink2g_decode_inter_chroma(Bink2Context *c,
 
     *prev_cbp = cbp = bink2g_decode_cbp_chroma(gb, *prev_cbp);
 
-    bink2g_decode_dc(c, gb, dc, 0, q, -1023, 1023, 0xA8);
+    bink2g_decode_dc(c, gb, dc, 0, q, c->is_ver25 ? -2047 : -1023, c->is_ver25 ? 2047 : 1023, 0xA8);
 
     ret = bink2g_decode_ac(gb, bink2g_scan, block, cbp,
                            q, bink2g_inter_qmat);
@@ -1241,6 +1241,7 @@ static int bink2g_decode_slice(Bink2Context *c,
     int w = c->avctx->width;
     int h = c->avctx->height;
     int ret = 0, dq, flags;
+    int do_alpha = c->has_alpha && c->constant_alpha < 0;
 
     memset(c->prev_q, 0, ((c->avctx->width + 31) / 32) * sizeof(*c->prev_q));
     memset(c->prev_mv, 0, ((c->avctx->width + 31) / 32) * sizeof(*c->prev_mv));
@@ -1276,28 +1277,28 @@ static int bink2g_decode_slice(Bink2Context *c,
                     bink2g_average_luma  (c, x  -32, -32, dst[0], stride[0], c->prev_idc[c->mb_pos - 1].dc[0]);
                     bink2g_average_chroma(c, x/2-16, -16, dst[2], stride[2], c->prev_idc[c->mb_pos - 1].dc[1]);
                     bink2g_average_chroma(c, x/2-16, -16, dst[1], stride[1], c->prev_idc[c->mb_pos - 1].dc[2]);
-                    if (c->has_alpha)
+                    if (do_alpha)
                         bink2g_average_luma(c, x-32, -32, dst[3], stride[3], c->prev_idc[c->mb_pos - 1].dc[3]);
                 }
                 if (!(flags & 0x20) && c->current_idc[c->mb_pos - 1].block_type != INTRA_BLOCK) {
                     bink2g_average_luma  (c, x  -32, 0, dst[0], stride[0], c->current_idc[c->mb_pos - 1].dc[0]);
                     bink2g_average_chroma(c, x/2-16, 0, dst[2], stride[2], c->current_idc[c->mb_pos - 1].dc[1]);
                     bink2g_average_chroma(c, x/2-16, 0, dst[1], stride[1], c->current_idc[c->mb_pos - 1].dc[2]);
-                    if (c->has_alpha)
+                    if (do_alpha)
                         bink2g_average_luma(c, x-32, 0, dst[3], stride[3], c->current_idc[c->mb_pos - 1].dc[3]);
                 }
                 if ((flags & 0x20) && !(flags & 0x80) && c->prev_idc[c->mb_pos + 1].block_type != INTRA_BLOCK) {
                     bink2g_average_luma  (c, x  +32, -32, dst[0], stride[0], c->prev_idc[c->mb_pos + 1].dc[0]);
                     bink2g_average_chroma(c, x/2+16, -16, dst[2], stride[2], c->prev_idc[c->mb_pos + 1].dc[1]);
                     bink2g_average_chroma(c, x/2+16, -16, dst[1], stride[1], c->prev_idc[c->mb_pos + 1].dc[2]);
-                    if (c->has_alpha)
+                    if (do_alpha)
                         bink2g_average_luma(c, x+32, -32, dst[3], stride[3], c->prev_idc[c->mb_pos + 1].dc[3]);
                 }
                 if (!(flags & 0x80) && c->prev_idc[c->mb_pos].block_type != INTRA_BLOCK) {
                     bink2g_average_luma  (c, x,   -32, dst[0], stride[0], c->prev_idc[c->mb_pos].dc[0]);
                     bink2g_average_chroma(c, x/2, -16, dst[2], stride[2], c->prev_idc[c->mb_pos].dc[1]);
                     bink2g_average_chroma(c, x/2, -16, dst[1], stride[1], c->prev_idc[c->mb_pos].dc[2]);
-                    if (c->has_alpha)
+                    if (do_alpha)
                         bink2g_average_luma(c, x, -32, dst[3], stride[3], c->prev_idc[c->mb_pos].dc[3]);
                 }
 
@@ -1324,7 +1325,7 @@ static int bink2g_decode_slice(Bink2Context *c,
                                                  dst[1] + x/2, stride[1], flags);
                 if (ret < 0)
                     goto fail;
-                if (c->has_alpha) {
+                if (do_alpha) {
                     c->comp = 3;
                     ret = bink2g_decode_intra_luma(c, gb, c->iblock, &a_cbp_intra, *intra_q, &c->dsp,
                                                    dst[3] + x, stride[3], flags);
@@ -1343,7 +1344,7 @@ static int bink2g_decode_slice(Bink2Context *c,
                              stride[1], sstride[1], 16);
                 copy_block16(dst[2] + (x/2), src[2] + (x/2) + sstride[2] * (y/2),
                              stride[2], sstride[2], 16);
-                if (c->has_alpha) {
+                if (do_alpha) {
                     copy_block16(dst[3] + x, src[3] + x + sstride[3] * y,
                                  stride[3], sstride[3], 32);
                     copy_block16(dst[3] + x + 16, src[3] + x + 16 + sstride[3] * y,
@@ -1378,7 +1379,7 @@ static int bink2g_decode_slice(Bink2Context *c,
                                                 w/2, h/2);
                 if (ret < 0)
                     goto fail;
-                if (c->has_alpha) {
+                if (do_alpha) {
                     c->comp = 3;
                     ret = bink2g_mcompensate_luma(c, x, y,
                                                   dst[3], stride[3],
@@ -1421,7 +1422,7 @@ static int bink2g_decode_slice(Bink2Context *c,
                                                 w/2, h/2);
                 if (ret < 0)
                     goto fail;
-                if (c->has_alpha) {
+                if (do_alpha) {
                     c->comp = 3;
                     ret = bink2g_mcompensate_luma(c, x, y,
                                                   dst[3], stride[3],
@@ -1450,7 +1451,7 @@ static int bink2g_decode_slice(Bink2Context *c,
                     u_cbp_inter = 0;
                     v_cbp_inter = 0;
                 }
-                if (c->has_alpha) {
+                if (do_alpha) {
                     c->comp = 3;
                     ret = bink2g_decode_inter_luma(c, gb, c->iblock, &a_cbp_inter, *inter_q, &c->dsp,
                                                    dst[3] + x, stride[3], flags);
