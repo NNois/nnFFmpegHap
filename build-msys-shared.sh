@@ -103,9 +103,10 @@ echo ""
     --extra-libs="$BASISU_LIBS"
 
 echo ""
-echo "Step 3: Verifying HAP is enabled..."
+echo "Step 3: Verifying HAP and Bink2 are enabled..."
 grep "CONFIG_HAP_ENCODER" config.h && echo "✓ HAP encoder enabled" || echo "✗ HAP encoder NOT enabled"
 grep "CONFIG_HAP_DECODER" config.h && echo "✓ HAP decoder enabled" || echo "✗ HAP decoder NOT enabled"
+grep "CONFIG_BINK2_DECODER" config.h && echo "✓ Bink2 decoder enabled" || echo "✗ Bink2 decoder NOT enabled"
 
 echo ""
 echo "Step 4: Building FFmpeg..."
@@ -133,6 +134,7 @@ echo "  - Hap H support (FourCC: 'HapH') - BC6H via basis_universal"
 echo "  - HapM support (FourCC: 'HapM')"
 echo "  - HapA support (FourCC: 'HapA')"
 echo "  - Fixed YCoCg color transform"
+echo "  - Bink video 2 decoder (binkvideo2)"
 echo "  - ProRes encoder (prores, prores_aw, prores_ks)"
 echo ""
 
@@ -161,6 +163,10 @@ echo ""
 
 echo "Testing HAP encoder:"
 "$FFMPEG_BIN/ffmpeg" -hide_banner -encoders 2>/dev/null | grep hap || echo "HAP not found in encoders"
+
+echo ""
+echo "Testing Bink2 decoder:"
+"$FFMPEG_BIN/ffmpeg" -hide_banner -decoders 2>/dev/null | grep binkvideo2 || echo "Bink2 not found in decoders"
 
 echo ""
 echo "Testing ProRes encoder:"
