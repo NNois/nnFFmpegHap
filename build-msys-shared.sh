@@ -26,6 +26,21 @@ else
     exit 1
 fi
 
+BINK2SDK_ROOT="${BINK2SDK_ROOT:-$PWD/thirdparty/bink2sdk}"
+BINK2SDK_CFLAGS=""
+BINK2SDK_LDFLAGS=""
+BINK2SDK_LIBS=""
+
+if [ -f "$BINK2SDK_ROOT/build_mingw/libbink2sdk.a" ]; then
+    BINK2SDK_CFLAGS="-I$BINK2SDK_ROOT/src"
+    BINK2SDK_LDFLAGS="-L$BINK2SDK_ROOT/build_mingw"
+    BINK2SDK_LIBS="-lbink2sdk"
+    echo "bink2sdk found: $BINK2SDK_ROOT/build_mingw/libbink2sdk.a"
+else
+    echo "WARNING: bink2sdk not built. Bink2 decoder will use built-in (no deblocking)."
+    echo "  Run thirdparty/bink2sdk/build-bink2sdk.sh to build it."
+fi
+
 echo "=========================================="
 echo "FFmpeg - Alternative Development Edition"
 echo "Rebuilding with SHARED DLLs (mpv-compatible)"
@@ -98,9 +113,9 @@ echo ""
     --enable-libshaderc \
     --enable-d3d11va \
     --enable-d3d12va \
-    --extra-cflags="-O3 $BASISU_CFLAGS" \
-    --extra-ldflags="$BASISU_LDFLAGS" \
-    --extra-libs="$BASISU_LIBS"
+    --extra-cflags="-O3 $BASISU_CFLAGS $BINK2SDK_CFLAGS" \
+    --extra-ldflags="$BASISU_LDFLAGS $BINK2SDK_LDFLAGS" \
+    --extra-libs="$BASISU_LIBS $BINK2SDK_LIBS"
 
 echo ""
 echo "Step 3: Verifying HAP and Bink2 are enabled..."

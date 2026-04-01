@@ -1,7 +1,12 @@
 /*
- * Bink video 2 decoder
- * Copyright (c) 2014 Konstantin Shishkov
- * Copyright (c) 2019 Paul B Mahol
+ * Bink video 2 decoder — RAD SDK backend
+ *
+ * Uses the official RAD Game Tools Bink2 SDK (ExpandBink2) for decoding,
+ * providing pixel-perfect output identical to Unreal Engine's Bink player.
+ *
+ * Copyright (c) 2014 Konstantin Shishkov (original reverse-engineered decoder)
+ * Copyright (c) 2019 Paul B Mahol (original reverse-engineered decoder)
+ * Copyright (c) 2026 Alternative Development (SDK integration)
  *
  * This file is part of FFmpeg.
  *
@@ -20,229 +25,149 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/avassert.h"
-#include "libavutil/attributes.h"
-#include "libavutil/emms.h"
 #include "libavutil/imgutils.h"
-#include "libavutil/internal.h"
+#include "libavutil/intreadwrite.h"
 #include "libavutil/mem.h"
-#include "libavutil/mem_internal.h"
 #include "avcodec.h"
-#include "blockdsp.h"
 #include "codec_internal.h"
-#include "copy_block.h"
 #include "decode.h"
-#include "mathops.h"
-#include "vlc.h"
 
-#define BITSTREAM_READER_LE
-#include "get_bits.h"
-#include "unary.h"
+/* RAD SDK: must define USING_EGT before including SDK headers so that
+ * rrCore.h picks egttypes.h instead of the missing radtypes.h.
+ * Also define build flags matching how libbink2sdk.a was compiled. */
+#ifndef USING_EGT
+#define USING_EGT
+#endif
+#ifndef INC_BINK2
+#define INC_BINK2
+#endif
+#ifndef __RADINSTATICLIB__
+#define __RADINSTATICLIB__
+#endif
+#ifndef NTELEMETRY
+#define NTELEMETRY
+#endif
+#include "bink.h"
+#include "expand2.h"
 
-#define BINK_FLAG_ALPHA   0x00100000
-#define BINKVER25         0x00040000  ///< bink 2.5+ (wider inter DC range)
-#define BINKCONSTANTA     0x00080000  ///< constant alpha in frame_flags bits 24-31
-#define BINKCONSTANTAMASK 0xFF000000
-#define DC_MPRED(A, B, C) FFMIN(FFMAX((C) + (B) - (A), FFMIN3(A, B, C)), FFMAX3(A, B, C))
-#define DC_MPRED2(A, B) FFMIN(FFMAX((A), (B)), FFMAX(FFMIN((A), (B)), 2 * (A) - (B)))
+#define BINK_FLAG_ALPHA 0x00100000
 
-static VLCElem bink2f_quant_vlc[512];
-static VLCElem bink2f_ac_val0_vlc[512];
-static VLCElem bink2f_ac_val1_vlc[512];
-static VLCElem bink2f_ac_skip0_vlc[512];
-static VLCElem bink2f_ac_skip1_vlc[512];
-static VLCElem bink2g_ac_skip0_vlc[512];
-static VLCElem bink2g_ac_skip1_vlc[512];
-static VLCElem bink2g_mv_vlc[512];
-
-#define BINK2_VLC_BITS 9
-
-static const uint8_t kb2h_num_slices[] = {
-    2, 3, 4, 8,
-};
-
-static const uint8_t luma_repos[] = {
-    0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15,
-};
-
-static const uint8_t dq_patterns[8] = { 8, 0, 1, 0, 2, 0, 1, 0 };
-
-static const uint8_t bink2_next_skips[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0,
-};
-
-typedef struct QuantPredict {
-    int8_t intra_q;
-    int8_t inter_q;
-} QuantPredict;
-
-typedef struct DCPredict {
-    float dc[4][16];
-    int   block_type;
-} DCPredict;
-
-typedef struct DCIPredict {
-    int dc[4][16];
-    int block_type;
-} DCIPredict;
-
-typedef struct MVectors {
-    int v[4][2];
-    int nb_vectors;
-} MVectors;
-
-typedef struct MVPredict {
-    MVectors mv;
-} MVPredict;
-
-/*
- * Decoder context
- */
 typedef struct Bink2Context {
     AVCodecContext  *avctx;
-    GetBitContext   gb;
-    BlockDSPContext dsp;
-    AVFrame         *last;
-    int             version;              ///< internal Bink file version
-    int             has_alpha;
+    int              has_alpha;
+    uint32_t         flags;       /* from extradata (OpenFlags) */
+    uint32_t         marker;      /* codec_tag = file marker (e.g. BINKMARKERV28) */
 
-    DECLARE_ALIGNED(16, float, block[4][64]);
-    DECLARE_ALIGNED(16, int16_t, iblock[4][64]);
+    /* RAD SDK frame buffers: 2 frames for current + reference */
+    BINKFRAMEBUFFERS fb;
+    uint8_t         *plane_buf;   /* single allocation for all plane data */
 
-    QuantPredict    *current_q;
-    QuantPredict    *prev_q;
-
-    DCPredict       *current_dc;
-    DCPredict       *prev_dc;
-
-    DCIPredict      *current_idc;
-    DCIPredict      *prev_idc;
-
-    MVPredict       *current_mv;
-    MVPredict       *prev_mv;
-
-    uint8_t         *col_cbp;
-    uint8_t         *row_cbp;
-
-    int             num_slices;
-    int             slice_height[8];
-
-    int             comp;
-    int             mb_pos;
-    unsigned        flags;
-    unsigned        frame_flags;
-    int             is_ver25;       ///< version >= 2.5 (wider inter DC range)
-    int             constant_alpha; ///< -1 if not constant, 0-255 if constant
+    /* RAD SDK slice configuration */
+    BINKSLICES       slices;
 } Bink2Context;
 
-/**
- * Bink2 video block types
- */
-enum BlockTypes {
-    INTRA_BLOCK = 0, ///< intra DCT block
-    SKIP_BLOCK,      ///< skipped block
-    MOTION_BLOCK,    ///< block is copied from previous frame with some offset
-    RESIDUE_BLOCK,   ///< motion block with some difference added
-};
-
-#include "bink2f.c"
-#include "bink2g.c"
-
-static void bink2_get_block_flags(GetBitContext *gb, int offset, int size, uint8_t *dst)
+static av_cold int bink2_decode_init(AVCodecContext *avctx)
 {
-    int j, v = 0, flags_left, mode = 0, nv;
-    unsigned cache, flag = 0;
+    Bink2Context *c = avctx->priv_data;
+    uint32_t ya_w, ya_h, c_w, c_h;
+    uint32_t ya_pitch, c_pitch;
+    size_t ya_size, c_size, frame_size, total;
+    uint8_t *ptr;
+    int ret;
 
-    if (get_bits1(gb) == 0) {
-        for (j = 0; j < size >> 3; j++)
-            dst[j] = get_bits(gb, 8);
-        dst[j] = get_bitsz(gb, size & 7);
+    c->avctx = avctx;
+    c->marker = avctx->codec_tag;
 
-        return;
+    if (avctx->extradata_size < 4) {
+        av_log(avctx, AV_LOG_ERROR, "Extradata missing or too short\n");
+        return AVERROR_INVALIDDATA;
     }
+    c->flags = AV_RL32(avctx->extradata);
+    c->has_alpha = !!(c->flags & BINK_FLAG_ALPHA);
 
-    flags_left = size;
-    while (flags_left > 0) {
-        cache = offset;
-        if (get_bits1(gb) == 0) {
-            if (mode == 3) {
-                flag ^= 1;
-            } else {
-                flag = get_bits1(gb);
-            }
-            mode = 2;
-            if (flags_left < 5) {
-                nv = get_bitsz(gb, flags_left - 1);
-                nv <<= (offset + 1) & 0x1f;
-                offset += flags_left;
-                flags_left = 0;
-            } else {
-                nv = get_bits(gb, 4) << ((offset + 1) & 0x1f);
-                offset += 5;
-                flags_left -= 5;
-            }
-            v |= flag << (cache & 0x1f) | nv;
-            if (offset >= 8) {
-                *dst++ = v & 0xff;
-                v >>= 8;
-                offset -= 8;
-            }
+    if ((ret = av_image_check_size(avctx->width, avctx->height, 0, avctx)) < 0)
+        return ret;
+
+    avctx->pix_fmt = c->has_alpha ? AV_PIX_FMT_YUVA420P : AV_PIX_FMT_YUV420P;
+
+    /* Initialize the RAD SDK global tables */
+    ExpandBink2GlobalInit();
+
+    /* Set up slice configuration */
+    setup_slices(c->marker, c->flags, avctx->width, avctx->height, &c->slices);
+
+    /* Allocate BINKFRAMEBUFFERS: 2 frames (current + reference) */
+    ya_w = FFALIGN(avctx->width, 32);
+    ya_h = FFALIGN(avctx->height, 32);
+    c_w  = ya_w / 2;
+    c_h  = ya_h / 2;
+
+    ya_pitch = FFALIGN(ya_w, 16);
+    c_pitch  = FFALIGN(c_w, 16);
+
+    ya_size = ya_pitch * ya_h;
+    c_size  = c_pitch  * c_h;
+
+    /* Per frame: Y + cR + cB + A (+ H for HDR, but we don't use it) */
+    frame_size = ya_size + c_size + c_size + (c->has_alpha ? ya_size : 0);
+    total = frame_size * 2; /* 2 frames */
+
+    c->plane_buf = av_mallocz(total);
+    if (!c->plane_buf)
+        return AVERROR(ENOMEM);
+
+    c->fb.TotalFrames    = 2;
+    c->fb.YABufferWidth  = ya_w;
+    c->fb.YABufferHeight = ya_h;
+    c->fb.cRcBBufferWidth  = c_w;
+    c->fb.cRcBBufferHeight = c_h;
+    c->fb.FrameNum = 0;
+
+    ptr = c->plane_buf;
+    for (int f = 0; f < 2; f++) {
+        c->fb.Frames[f].YPlane.Buffer      = ptr; ptr += ya_size;
+        c->fb.Frames[f].YPlane.Allocate    = 1;
+        c->fb.Frames[f].YPlane.BufferPitch = ya_pitch;
+
+        c->fb.Frames[f].cRPlane.Buffer      = ptr; ptr += c_size;
+        c->fb.Frames[f].cRPlane.Allocate    = 1;
+        c->fb.Frames[f].cRPlane.BufferPitch = c_pitch;
+
+        c->fb.Frames[f].cBPlane.Buffer      = ptr; ptr += c_size;
+        c->fb.Frames[f].cBPlane.Allocate    = 1;
+        c->fb.Frames[f].cBPlane.BufferPitch = c_pitch;
+
+        if (c->has_alpha) {
+            c->fb.Frames[f].APlane.Buffer      = ptr; ptr += ya_size;
+            c->fb.Frames[f].APlane.Allocate    = 1;
+            c->fb.Frames[f].APlane.BufferPitch = ya_pitch;
         } else {
-            int temp, bits, nb_coded;
-
-            bits = flags_left < 4 ? 2 : flags_left < 16 ? 4 : 5;
-            nb_coded = bits + 1;
-            if (mode == 3) {
-                flag ^= 1;
-            } else {
-                nb_coded++;
-                flag = get_bits1(gb);
-            }
-            nb_coded = FFMIN(nb_coded, flags_left);
-            flags_left -= nb_coded;
-            if (flags_left > 0) {
-                temp = get_bits(gb, bits);
-                flags_left -= temp;
-                nb_coded += temp;
-                mode = temp == (1 << bits) - 1U ? 1 : 3;
-            }
-
-            temp = (flag << 0x1f) >> 0x1f & 0xff;
-            while (nb_coded > 8) {
-                v |= temp << (cache & 0x1f);
-                *dst++ = v & 0xff;
-                v >>= 8;
-                nb_coded -= 8;
-            }
-            if (nb_coded > 0) {
-                offset += nb_coded;
-                v |= ((1 << (nb_coded & 0x1f)) - 1U & temp) << (cache & 0x1f);
-                if (offset >= 8) {
-                    *dst++ = v & 0xff;
-                    v >>= 8;
-                    offset -= 8;
-                }
-            }
+            c->fb.Frames[f].APlane.Buffer      = NULL;
+            c->fb.Frames[f].APlane.Allocate    = 0;
+            c->fb.Frames[f].APlane.BufferPitch = 0;
         }
+
+        c->fb.Frames[f].HPlane.Buffer      = NULL;
+        c->fb.Frames[f].HPlane.Allocate    = 0;
+        c->fb.Frames[f].HPlane.BufferPitch = 0;
     }
 
-    if (offset != 0)
-        *dst = v;
+    av_log(avctx, AV_LOG_INFO,
+           "bink2: SDK decoder, %dx%d, alpha=%d, marker=0x%08X, slices=%d\n",
+           avctx->width, avctx->height, c->has_alpha, c->marker, c->slices.slice_count);
+
+    return 0;
 }
 
 static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                               int *got_frame, AVPacket *pkt)
 {
-    Bink2Context * const c = avctx->priv_data;
-    GetBitContext *gb = &c->gb;
-    uint8_t *dst[4];
-    uint8_t *src[4];
-    int stride[4];
-    int sstride[4];
-    uint32_t off = 0;
-    int is_kf = !!(pkt->flags & AV_PKT_FLAG_KEY);
+    Bink2Context *c = avctx->priv_data;
     int ret, w, h;
-    int height_a;
+    uint32_t result;
+    int new_frame, ya_pitch, c_pitch;
+    uint8_t *y_src, *cr_src, *cb_src, *a_src;
+    int is_kf = !!(pkt->flags & AV_PKT_FLAG_KEY);
 
     w = avctx->width;
     h = avctx->height;
@@ -252,99 +177,73 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
     avctx->width  = w;
     avctx->height = h;
 
-    if ((ret = ff_get_buffer(avctx, frame, AV_GET_BUFFER_FLAG_REF)) < 0)
+    if ((ret = ff_get_buffer(avctx, frame, 0)) < 0)
         return ret;
 
-    for (int i = 0; i < 4; i++) {
-        src[i]     = c->last->data[i];
-        dst[i]     = frame->data[i];
-        stride[i]  = frame->linesize[i];
-        sstride[i] = c->last->linesize[i];
-    }
+    /* Reset slice work counter for this frame (used by SDK's atomic dispatch) */
+    c->slices.slice_inc = 0;
 
-    if (!is_kf && (!src[0] || !src[1] || !src[2]))
+    /* Call the RAD SDK decoder.
+     * comp     = pkt->data (compressed frame data, starts with frame_flags U32)
+     * compinfo = pkt->data + pkt->size (end of compressed data)
+     * alpha    = 1 if alpha plane present in bitstream
+     * hdr      = 0 (no HDR support yet)
+     * key      = 1 if keyframe
+     * control  = startslice=0, numslices=slice_count → (slice_count << 4) | 0
+     * seam     = NULL (single-threaded)
+     * gpu      = NULL (CPU decode)
+     */
+    result = ExpandBink2(&c->fb,
+                         pkt->data,                  /* compressed data */
+                         c->has_alpha ? 1 : 0,       /* alpha */
+                         0,                           /* hdr */
+                         is_kf ? 1 : 0,              /* key */
+                         pkt->data + pkt->size,       /* compinfo / end */
+                         &c->slices,
+                         (c->slices.slice_count << 4) | 0, /* control: start=0, num=all */
+                         NULL,                        /* seam (single-threaded) */
+                         NULL);                       /* gpu (CPU decode) */
+
+    if (!result) {
+        av_log(avctx, AV_LOG_ERROR, "ExpandBink2 failed\n");
         return AVERROR_INVALIDDATA;
-
-    c->frame_flags = AV_RL32(pkt->data);
-    ff_dlog(avctx, "frame flags %X\n", c->frame_flags);
-
-    c->is_ver25 = !!(c->frame_flags & BINKVER25);
-
-    /* BINKCONSTANTA: alpha is a constant value stored in bits 24-31 of frame_flags */
-    c->constant_alpha = -1;
-    if ((c->frame_flags & BINKCONSTANTA) && c->has_alpha) {
-        c->constant_alpha = (c->frame_flags & BINKCONSTANTAMASK) >> 24;
     }
 
-    if ((ret = init_get_bits8(gb, pkt->data, pkt->size)) < 0)
-        return ret;
+    /* The SDK reads from fb.Frames[FrameNum] (old/reference) and writes to
+     * fb.Frames[(FrameNum+1) % TotalFrames] (new/current). */
+    new_frame = (c->fb.FrameNum + 1) % c->fb.TotalFrames;
 
-    height_a = (avctx->height + 31) & 0xFFFFFFE0;
-    if (c->version <= 'f') {
-        c->num_slices = 2;
-        c->slice_height[0] = (avctx->height / 2 + 16) & 0xFFFFFFE0;
-    } else if (c->version == 'g') {
-        if (height_a < 128) {
-            c->num_slices = 1;
-        } else {
-            c->num_slices = 2;
-            c->slice_height[0] = (avctx->height / 2 + 16) & 0xFFFFFFE0;
-        }
-    } else {
-        int start, end;
+    ya_pitch = c->fb.Frames[new_frame].YPlane.BufferPitch;
+    c_pitch  = c->fb.Frames[new_frame].cRPlane.BufferPitch;
 
-        c->num_slices = kb2h_num_slices[c->flags & 3];
-        start = 0;
-        end = height_a + 32 * c->num_slices - 1;
-        for (int i = 0; i < c->num_slices - 1; i++) {
-            start += ((end - start) / (c->num_slices - i)) & 0xFFFFFFE0;
-            end -= 32;
-            c->slice_height[i] = start;
-        }
-    }
-    c->slice_height[c->num_slices - 1] = height_a;
+    y_src  = (uint8_t *)c->fb.Frames[new_frame].YPlane.Buffer;
+    cr_src = (uint8_t *)c->fb.Frames[new_frame].cRPlane.Buffer;
+    cb_src = (uint8_t *)c->fb.Frames[new_frame].cBPlane.Buffer;
+    a_src  = (uint8_t *)c->fb.Frames[new_frame].APlane.Buffer;
 
-    skip_bits_long(gb, 32 + 32 * (c->num_slices - 1));
+    /* Copy Y plane */
+    for (int y = 0; y < h; y++)
+        memcpy(frame->data[0] + y * frame->linesize[0],
+               y_src + y * ya_pitch, w);
 
-    if (c->frame_flags & 0x10000) {
-        if (!(c->frame_flags & 0x8000))
-            bink2_get_block_flags(gb, 1, (((avctx->height + 15) & ~15) >> 3) - 1, c->row_cbp);
-        if (!(c->frame_flags & 0x4000))
-            bink2_get_block_flags(gb, 1, (((avctx->width + 15) & ~15) >> 3) - 1, c->col_cbp);
+    /* Copy chroma planes (Bink SDK: cR=V, cB=U in standard Bink convention,
+     * but FFmpeg YUV420P: data[1]=U(Cb), data[2]=V(Cr)) */
+    for (int y = 0; y < (h + 1) / 2; y++) {
+        memcpy(frame->data[1] + y * frame->linesize[1],
+               cb_src + y * c_pitch, (w + 1) / 2);
+        memcpy(frame->data[2] + y * frame->linesize[2],
+               cr_src + y * c_pitch, (w + 1) / 2);
     }
 
-    for (int i = 0; i < c->num_slices; i++) {
-        if (i == c->num_slices - 1)
-            off = pkt->size;
-        else
-            off = AV_RL32(pkt->data + 4 + i * 4);
-
-        if (c->version <= 'f')
-            ret = bink2f_decode_slice(c, dst, stride, src, sstride, is_kf, i ? c->slice_height[i-1] : 0, c->slice_height[i]);
-        else
-            ret = bink2g_decode_slice(c, dst, stride, src, sstride, is_kf, i ? c->slice_height[i-1] : 0, c->slice_height[i]);
-        if (ret < 0)
-            return ret;
-
-        align_get_bits(gb);
-        if (get_bits_left(gb) < 0)
-            av_log(avctx, AV_LOG_WARNING, "slice %d: overread\n", i);
-        if (8 * (off - (get_bits_count(gb) >> 3)) > 24)
-            av_log(avctx, AV_LOG_WARNING, "slice %d: underread %d\n", i, 8 * (off - (get_bits_count(gb) >> 3)));
-        skip_bits_long(gb, 8 * (off - (get_bits_count(gb) >> 3)));
-
-        dst[0] = frame->data[0] + c->slice_height[i]   * stride[0];
-        dst[1] = frame->data[1] + c->slice_height[i]/2 * stride[1];
-        dst[2] = frame->data[2] + c->slice_height[i]/2 * stride[2];
-        dst[3] = frame->data[3] + c->slice_height[i]   * stride[3];
+    /* Copy alpha plane */
+    if (c->has_alpha && a_src && frame->data[3]) {
+        for (int y = 0; y < h; y++)
+            memcpy(frame->data[3] + y * frame->linesize[3],
+                   a_src + y * ya_pitch, w);
     }
 
-    /* Fill constant alpha plane if BINKCONSTANTA is set */
-    if (c->constant_alpha >= 0 && frame->data[3]) {
-        for (int y = 0; y < avctx->height; y++)
-            memset(frame->data[3] + y * frame->linesize[3],
-                   c->constant_alpha, avctx->width);
-    }
+    /* Advance the SDK frame counter for the next frame */
+    c->fb.FrameNum = (c->fb.FrameNum + 1) % c->fb.TotalFrames;
 
     if (is_kf)
         frame->flags |= AV_FRAME_FLAG_KEY;
@@ -352,156 +251,36 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
         frame->flags &= ~AV_FRAME_FLAG_KEY;
     frame->pict_type = is_kf ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_P;
 
-    av_frame_unref(c->last);
-    if ((ret = av_frame_ref(c->last, frame)) < 0)
-        return ret;
-
     *got_frame = 1;
-
-    /* always report that the buffer was completely consumed */
     return pkt->size;
-}
-
-static av_cold int bink2_decode_init(AVCodecContext *avctx)
-{
-    Bink2Context * const c = avctx->priv_data;
-    int ret;
-
-    c->version = avctx->codec_tag >> 24;
-    if (avctx->extradata_size < 4) {
-        av_log(avctx, AV_LOG_ERROR, "Extradata missing or too short\n");
-        return AVERROR_INVALIDDATA;
-    }
-    c->flags = AV_RL32(avctx->extradata);
-    av_log(avctx, AV_LOG_DEBUG, "flags: 0x%X\n", c->flags);
-    c->has_alpha = c->flags & BINK_FLAG_ALPHA;
-    c->avctx = avctx;
-
-    c->last = av_frame_alloc();
-    if (!c->last)
-        return AVERROR(ENOMEM);
-
-    if ((ret = av_image_check_size(avctx->width, avctx->height, 0, avctx)) < 0)
-        return ret;
-
-    avctx->pix_fmt = c->has_alpha ? AV_PIX_FMT_YUVA420P : AV_PIX_FMT_YUV420P;
-
-    ff_blockdsp_init(&c->dsp);
-
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2f_quant_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2f_quant_codes),
-                       bink2f_quant_bits, 1, 1,
-                       bink2f_quant_codes, 1, 1,
-                       NULL, 0, 0, VLC_INIT_LE);
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2f_ac_val0_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2f_ac_val_bits[0]),
-                       bink2f_ac_val_bits[0], 1, 1,
-                       bink2f_ac_val_codes[0], 2, 2,
-                       NULL, 0, 0, VLC_INIT_LE);
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2f_ac_val1_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2f_ac_val_bits[1]),
-                       bink2f_ac_val_bits[1], 1, 1,
-                       bink2f_ac_val_codes[1], 2, 2,
-                       NULL, 0, 0, VLC_INIT_LE);
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2f_ac_skip0_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2f_ac_skip_bits[0]),
-                       bink2f_ac_skip_bits[0], 1, 1,
-                       bink2f_ac_skip_codes[0], 2, 2,
-                       NULL, 0, 0, VLC_INIT_LE);
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2f_ac_skip1_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2f_ac_skip_bits[1]),
-                       bink2f_ac_skip_bits[1], 1, 1,
-                       bink2f_ac_skip_codes[1], 2, 2,
-                       NULL, 0, 0, VLC_INIT_LE);
-
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2g_ac_skip0_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2g_ac_skip_bits[0]),
-                       bink2g_ac_skip_bits[0], 1, 1,
-                       bink2g_ac_skip_codes[0], 2, 2,
-                       NULL, 0, 0, VLC_INIT_LE);
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2g_ac_skip1_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2g_ac_skip_bits[1]),
-                       bink2g_ac_skip_bits[1], 1, 1,
-                       bink2g_ac_skip_codes[1], 2, 2,
-                       NULL, 0, 0, VLC_INIT_LE);
-    VLC_INIT_STATIC_SPARSE_TABLE(bink2g_mv_vlc, BINK2_VLC_BITS,
-                       FF_ARRAY_ELEMS(bink2g_mv_bits),
-                       bink2g_mv_bits, 1, 1,
-                       bink2g_mv_codes, 1, 1,
-                       NULL, 0, 0, VLC_INIT_LE);
-
-    c->current_q = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->current_q));
-    if (!c->current_q)
-        return AVERROR(ENOMEM);
-
-    c->prev_q = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->prev_q));
-    if (!c->prev_q)
-        return AVERROR(ENOMEM);
-
-    c->current_dc = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->current_dc));
-    if (!c->current_dc)
-        return AVERROR(ENOMEM);
-
-    c->prev_dc = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->prev_dc));
-    if (!c->prev_dc)
-        return AVERROR(ENOMEM);
-
-    c->current_idc = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->current_idc));
-    if (!c->current_idc)
-        return AVERROR(ENOMEM);
-
-    c->prev_idc = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->prev_idc));
-    if (!c->prev_idc)
-        return AVERROR(ENOMEM);
-
-    c->current_mv = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->current_mv));
-    if (!c->current_mv)
-        return AVERROR(ENOMEM);
-
-    c->prev_mv = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->prev_mv));
-    if (!c->prev_mv)
-        return AVERROR(ENOMEM);
-
-    c->col_cbp = av_calloc((((avctx->width + 31) >> 3) + 7) >> 3, sizeof(*c->col_cbp));
-    if (!c->col_cbp)
-        return AVERROR(ENOMEM);
-
-    c->row_cbp = av_calloc((((avctx->height + 31) >> 3) + 7) >> 3, sizeof(*c->row_cbp));
-    if (!c->row_cbp)
-        return AVERROR(ENOMEM);
-
-    return 0;
 }
 
 static void bink2_flush(AVCodecContext *avctx)
 {
     Bink2Context *c = avctx->priv_data;
 
-    av_frame_unref(c->last);
+    /* Reset frame counter and zero all plane buffers */
+    c->fb.FrameNum = 0;
+    if (c->plane_buf) {
+        size_t ya_size = c->fb.Frames[0].YPlane.BufferPitch * c->fb.YABufferHeight;
+        size_t c_size  = c->fb.Frames[0].cRPlane.BufferPitch * c->fb.cRcBBufferHeight;
+        size_t frame_size = ya_size + c_size + c_size + (c->has_alpha ? ya_size : 0);
+        memset(c->plane_buf, 0, frame_size * 2);
+    }
 }
 
 static av_cold int bink2_decode_end(AVCodecContext *avctx)
 {
-    Bink2Context * const c = avctx->priv_data;
+    Bink2Context *c = avctx->priv_data;
 
-    av_frame_free(&c->last);
-    av_freep(&c->current_q);
-    av_freep(&c->prev_q);
-    av_freep(&c->current_dc);
-    av_freep(&c->prev_dc);
-    av_freep(&c->current_idc);
-    av_freep(&c->prev_idc);
-    av_freep(&c->current_mv);
-    av_freep(&c->prev_mv);
-    av_freep(&c->col_cbp);
-    av_freep(&c->row_cbp);
+    av_freep(&c->plane_buf);
 
     return 0;
 }
 
 const FFCodec ff_bink2_decoder = {
     .p.name         = "binkvideo2",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("Bink video 2"),
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Bink video 2 (RAD SDK)"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_BINKVIDEO2,
     .priv_data_size = sizeof(Bink2Context),
