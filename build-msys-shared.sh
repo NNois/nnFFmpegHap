@@ -61,6 +61,7 @@ echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-liba
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
 echo "  - HAP: --enable-libsnappy + basis_universal (BC7/BC6H static link)"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
+echo "  - Network: --enable-libsrt --enable-openssl"
 echo "  - Hardware Decode: --enable-d3d11va --enable-d3d12va"
 echo "  - CFLAGS: -O3 $BASISU_CFLAGS"
 echo ""
@@ -109,6 +110,8 @@ echo ""
     --enable-libmp3lame \
     --enable-libfdk-aac \
     --enable-libzimg \
+    --enable-libsrt \
+    --enable-openssl \
     --enable-vulkan \
     --enable-libshaderc \
     --enable-d3d11va \

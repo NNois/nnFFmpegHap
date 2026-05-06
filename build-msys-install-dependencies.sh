@@ -102,7 +102,8 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-SDL2 \
     mingw-w64-x86_64-zlib \
     mingw-w64-x86_64-bzip2 \
-    mingw-w64-x86_64-zimg
+    mingw-w64-x86_64-zimg \
+    mingw-w64-x86_64-srt
 
 echo ""
 echo "Step 5: Installing Vulkan libraries..."
@@ -146,6 +147,7 @@ echo "    - libwebp (WebP support)"
 echo "    - SDL2 (video playback for ffplay)"
 echo "    - zlib & bzip2 (compression)"
 echo "    - zimg (zscale filter for high-quality scaling)"
+echo "    - libsrt (Secure Reliable Transport protocol)"
 echo ""
 echo "  Vulkan Libraries:"
 echo "    - Vulkan headers & loader (GPU acceleration)"
