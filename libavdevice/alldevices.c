@@ -59,6 +59,8 @@ extern const FFOutputFormat ff_xv_muxer;
 /* external libraries */
 extern const FFInputFormat  ff_libcdio_demuxer;
 extern const FFInputFormat  ff_libdc1394_demuxer;
+extern const FFInputFormat  ff_libndi_newtek_demuxer;
+extern const FFOutputFormat ff_libndi_newtek_muxer;
 FF_VISIBILITY_POP_HIDDEN
 
 #include "libavdevice/outdev_list.c"

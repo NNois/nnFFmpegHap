@@ -51,6 +51,8 @@ OBJS-$(CONFIG_XV_OUTDEV)                 += xv.o
 # external libraries
 OBJS-$(CONFIG_LIBCDIO_INDEV)             += libcdio.o
 OBJS-$(CONFIG_LIBDC1394_INDEV)           += libdc1394.o
+OBJS-$(CONFIG_LIBNDI_NEWTEK_INDEV)       += libndi_newtek_dec.o
+OBJS-$(CONFIG_LIBNDI_NEWTEK_OUTDEV)      += libndi_newtek_enc.o
 
 # Objects duplicated from other libraries for shared builds
 SHLIBOBJS-$(CONFIG_DECKLINK_INDEV)       += reverse.o
@@ -62,6 +64,8 @@ SHLIBOBJS-$(HAVE_GNU_WINDRES)            += avdeviceres.o
 SKIPHEADERS                              += decklink_common.h
 SKIPHEADERS-$(CONFIG_DECKLINK)           += decklink_enc.h decklink_dec.h \
                                             decklink_common_c.h
+SKIPHEADERS-$(CONFIG_LIBNDI_NEWTEK_INDEV)  += libndi_newtek_common.h
+SKIPHEADERS-$(CONFIG_LIBNDI_NEWTEK_OUTDEV) += libndi_newtek_common.h
 SKIPHEADERS-$(CONFIG_DSHOW_INDEV)        += dshow_capture.h
 SKIPHEADERS-$(CONFIG_FBDEV_INDEV)        += fbdev_common.h
 SKIPHEADERS-$(CONFIG_FBDEV_OUTDEV)       += fbdev_common.h

@@ -41,6 +41,22 @@ else
     echo "  Run thirdparty/bink2sdk/build-bink2sdk.sh to build it."
 fi
 
+NDISDK_ROOT="${NDISDK_ROOT:-$PWD/thirdparty/ndisdk}"
+NDISDK_CFLAGS=""
+NDISDK_LDFLAGS=""
+NDISDK_ENABLE=""
+
+if [ -f "$NDISDK_ROOT/include/Processing.NDI.Lib.h" ] && \
+   { [ -f "$NDISDK_ROOT/build_mingw/libndi.dll.a" ] || [ -f "$NDISDK_ROOT/build_mingw/libndi.a" ]; }; then
+    NDISDK_CFLAGS="-I$NDISDK_ROOT/include"
+    NDISDK_LDFLAGS="-L$NDISDK_ROOT/build_mingw"
+    NDISDK_ENABLE="--enable-libndi_newtek"
+    echo "NDI SDK found: $NDISDK_ROOT (libndi_newtek enabled)"
+else
+    echo "WARNING: NDI SDK not prepared. NDI input/output devices disabled."
+    echo "  Run thirdparty/ndisdk/prepare-ndisdk.sh to enable them."
+fi
+
 echo "=========================================="
 echo "FFmpeg - Alternative Development Edition"
 echo "Rebuilding with SHARED DLLs (mpv-compatible)"
@@ -62,6 +78,7 @@ echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enabl
 echo "  - HAP: --enable-libsnappy + basis_universal (BC7/BC6H static link)"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
 echo "  - Network: --enable-libsrt --enable-openssl"
+echo "  - NDI: ${NDISDK_ENABLE:-disabled (run thirdparty/ndisdk/prepare-ndisdk.sh)}"
 echo "  - Hardware Decode: --enable-d3d11va --enable-d3d12va"
 echo "  - CFLAGS: -O3 $BASISU_CFLAGS"
 echo ""
@@ -116,8 +133,9 @@ echo ""
     --enable-libshaderc \
     --enable-d3d11va \
     --enable-d3d12va \
-    --extra-cflags="-O3 $BASISU_CFLAGS $BINK2SDK_CFLAGS" \
-    --extra-ldflags="$BASISU_LDFLAGS $BINK2SDK_LDFLAGS" \
+    $NDISDK_ENABLE \
+    --extra-cflags="-O3 $BASISU_CFLAGS $BINK2SDK_CFLAGS $NDISDK_CFLAGS" \
+    --extra-ldflags="$BASISU_LDFLAGS $BINK2SDK_LDFLAGS $NDISDK_LDFLAGS" \
     --extra-libs="$BASISU_LIBS $BINK2SDK_LIBS"
 
 echo ""
@@ -179,6 +197,13 @@ echo ""
 echo "✓ Bundled $DLL_COUNT DLLs"
 echo ""
 
+# NDI runtime DLL is not a mingw64 DLL, bundle it explicitly
+if [ -n "$NDISDK_ENABLE" ] && [ -f "$NDISDK_ROOT/build_mingw/Processing.NDI.Lib.x64.dll" ]; then
+    cp -v "$NDISDK_ROOT/build_mingw/Processing.NDI.Lib.x64.dll" "$FFMPEG_BIN/"
+    echo "✓ Bundled NDI runtime DLL"
+    echo ""
+fi
+
 echo "Testing HAP encoder:"
 "$FFMPEG_BIN/ffmpeg" -hide_banner -encoders 2>/dev/null | grep hap || echo "HAP not found in encoders"
 
@@ -189,6 +214,12 @@ echo "Testing Bink2 decoder:"
 echo ""
 echo "Testing ProRes encoder:"
 "$FFMPEG_BIN/ffmpeg" -hide_banner -encoders 2>/dev/null | grep prores || echo "ProRes not found in encoders"
+
+if [ -n "$NDISDK_ENABLE" ]; then
+    echo ""
+    echo "Testing NDI devices:"
+    "$FFMPEG_BIN/ffmpeg" -hide_banner -devices 2>/dev/null | grep libndi_newtek || echo "NDI not found in devices"
+fi
 
 echo ""
 echo "=========================================="
