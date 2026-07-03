@@ -4,12 +4,13 @@
 
 set -e
 
-LOG_FILE="${X265_BUILD_LOG:-/c/ff/ff/build-msys-x265-with-alpha.log}"
-: > "$LOG_FILE"
-exec > >(tee -a "$LOG_FILE") 2>&1
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+LOG_FILE="${X265_BUILD_LOG:-$SCRIPT_DIR/build-msys-x265-with-alpha.log}"
+mkdir -p "$(dirname "$LOG_FILE")"
+: > "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "=========================================="
 echo "Building x265 with ALPHA SUPPORT"
@@ -19,17 +20,20 @@ echo ""
 X265_VERSION="4.1"
 X265_DIR="x265_${X265_VERSION}"
 X265_TARBALL="x265_${X265_VERSION}.tar.gz"
+X265_TARBALL_PATH="$SCRIPT_DIR/$X265_TARBALL"
 X265_URL="https://bitbucket.org/multicoreware/x265_git/downloads/${X265_TARBALL}"
+INSTALL_PREFIX="${X265_INSTALL_PREFIX:-${MINGW_PREFIX:-/mingw64}}"
+X265_BIN="$INSTALL_PREFIX/bin/x265"
 
 # Download x265 source if not already present
 if [ ! -d "$X265_DIR" ]; then
     echo "Step 1: Downloading x265 ${X265_VERSION}..."
-    if [ ! -f "$X265_TARBALL" ]; then
-        curl -L -o "$X265_TARBALL" "$X265_URL"
+    if [ ! -f "$X265_TARBALL_PATH" ]; then
+        curl -L -o "$X265_TARBALL_PATH" "$X265_URL"
     fi
     
     echo "Step 2: Extracting..."
-    tar -xzf "$X265_TARBALL"
+    tar -xzf "$X265_TARBALL_PATH"
 else
     echo "✓ x265 source already present"
 fi
@@ -39,11 +43,11 @@ cd "$X265_DIR/source"
 echo ""
 echo "Step 3: Restoring original CMakeLists.txt..."
 # Ensure we use the pristine CMakeLists to avoid broken patches
-if [ ! -f "$X265_TARBALL" ]; then
+if [ ! -f "$X265_TARBALL_PATH" ]; then
     echo "Tarball missing, downloading ${X265_TARBALL}..."
-    curl -L -o "$X265_TARBALL" "$X265_URL"
+    curl -L -o "$X265_TARBALL_PATH" "$X265_URL"
 fi
-tar -xOf "$X265_TARBALL" "$X265_DIR/source/CMakeLists.txt" > CMakeLists.txt
+tar -xOf "$X265_TARBALL_PATH" "$X265_DIR/source/CMakeLists.txt" > CMakeLists.txt
 echo "✓ CMakeLists.txt restored"
 
 echo "Patching CMakeLists.txt for CMake 4.x..."
@@ -83,7 +87,7 @@ cd build
 
 cmake -G "MSYS Makefiles" \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-    -DCMAKE_INSTALL_PREFIX=/mingw64 \
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -DENABLE_SHARED=ON \
     -DENABLE_ALPHA=ON \
     -DHIGH_BIT_DEPTH=ON \
@@ -96,20 +100,20 @@ echo "Using $CPU_CORES CPU cores..."
 make -j$CPU_CORES
 
 echo ""
-echo "Step 6: Installing x265 to /mingw64..."
+echo "Step 6: Installing x265 to $INSTALL_PREFIX..."
 make install
 
 echo ""
 echo "Step 7: Quick alpha capability check..."
-if command -v /mingw64/bin/x265 >/dev/null 2>&1; then
-    /mingw64/bin/x265 --version || true
-    if /mingw64/bin/x265 --help 2>/dev/null | grep -qi "alpha"; then
+if command -v "$X265_BIN" >/dev/null 2>&1; then
+    "$X265_BIN" --version || true
+    if "$X265_BIN" --help 2>/dev/null | grep -qi "alpha"; then
         echo "✓ x265 help mentions alpha support"
     else
         echo "⚠️  x265 help does not mention alpha (not definitive)"
     fi
 else
-    echo "⚠️  /mingw64/bin/x265 not found, skipping alpha check"
+    echo "⚠️  $X265_BIN not found, skipping alpha check"
 fi
 
 echo ""
