@@ -1,6 +1,7 @@
 # FFmpeg (HAP fork)
 
 ## Build quick start
+- Fresh PC only: from an Administrator PowerShell, `./build-msys-install-msys2.ps1` (installs MSYS2 itself via Chocolatey to `C:\tools\msys64`).
 - Terminal: MSYS2 MINGW64.
 - Install deps: `./build-msys-install-dependencies.sh`.
 - Build portable tools: `./build-mysys-shared.sh` (bundles DLLs).
