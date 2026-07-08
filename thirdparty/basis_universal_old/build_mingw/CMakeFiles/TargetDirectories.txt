@@ -1,0 +1,4 @@
+C:/ff/ff/thirdparty/basis_universal/build_mingw/CMakeFiles/basisu_encoder.dir
+C:/ff/ff/thirdparty/basis_universal/build_mingw/CMakeFiles/basisu.dir
+C:/ff/ff/thirdparty/basis_universal/build_mingw/CMakeFiles/edit_cache.dir
+C:/ff/ff/thirdparty/basis_universal/build_mingw/CMakeFiles/rebuild_cache.dir

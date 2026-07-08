@@ -25,6 +25,7 @@
 #include "libavformat/internal.h"
 #include "libavformat/mux.h"
 #include "libavutil/frame.h"
+#include "libavutil/mem.h"
 #include "libavutil/opt.h"
 #include "libavutil/imgutils.h"
 

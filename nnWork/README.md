@@ -1,5 +1,13 @@
 # FFmpeg (HAP fork)
 
+## Docs par sujet
+- [HAP.md](HAP.md) — Hap 1/Alpha/Q/M/A/R/HDR (usage encodeur + options)
+- [BASIS_UNIVERSAL.md](BASIS_UNIVERSAL.md) — backend BC7/BC6H de Hap R/HDR
+- [H265-ALPHA.md](H265-ALPHA.md) — HEVC alpha (encode OK, decode KO) → détails [README_HEVC-Alpha.md](README_HEVC-Alpha.md)
+- [BINK2.md](BINK2.md) — décodeur Bink Video 2 (SDK RAD)
+- [NDI.md](NDI.md) — device NDI (libndi_newtek) entrée/sortie
+- [DECKLINK.md](DECKLINK.md) — cartes Blackmagic (device decklink)
+
 ## Build quick start
 - Fresh PC only: from an Administrator PowerShell, `./build-msys-install-msys2.ps1` (installs MSYS2 itself via Chocolatey to `C:\tools\msys64`).
 - Terminal: MSYS2 MINGW64.
@@ -8,7 +16,7 @@
 - Copy with DLLs: `./ build-msys-copy-with-dlls.sh /c/path/to/app`.
 
 ## What changed
-- HAP: fixed HapQ YCoCg transform, added HapA (alpha-only), added HapR (BC7 modes 1/5/6/7), and rebuilt HapM (Hap Q Alpha) multi-texture/chunk headers to match the spec. Added `-bc7_uber` quality option for HapR.
+- HAP: fixed HapQ YCoCg transform, added HapA (alpha-only), added HapR (BC7 modes 1/5/6/7), added HapH (BC6H HDR encode), and rebuilt HapM (Hap Q Alpha) multi-texture/chunk headers to match the spec. Quality via `-bc7_quality` (HapR) / `-bc6_quality` (HapH), both 0..4. BC7/BC6H now encoded through basis_universal. See [HAP.md](HAP.md).
 - Toolchain: Snappy/HAP enabled plus libvfw32 and build utilities wired into the latest build scripts.
 - Codecs kept: x264, x265, libvpx, vorbis/opus/lame, plus the usual FFmpeg stack.
 

@@ -105,6 +105,11 @@ static VANCLineNumber vanc_line_numbers[] = {
     {bmdModeUnknown, 0, -1, -1, -1}
 };
 
+/* SDK 15 (BLACKMAGIC_DECKLINK_API_VERSION 0x0f000000) overhauled DeckLink's
+   memory management: IDeckLinkMemoryAllocator and
+   IDeckLinkInput::SetVideoInputFrameMemoryAllocator were removed. On newer
+   SDKs we simply let DeckLink use its default allocator. */
+#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
 class decklink_allocator : public IDeckLinkMemoryAllocator
 {
 public:
@@ -142,6 +147,25 @@ public:
 private:
         std::atomic<int>  _refs;
 };
+#endif /* BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000 */
+
+/* SDK 15 moved IDeckLinkVideoFrame::GetBytes() to the new IDeckLinkVideoBuffer
+   interface; query for it on newer SDKs. The returned pointer stays valid for
+   the lifetime of videoFrame. */
+static HRESULT decklink_get_video_frame_bytes(IDeckLinkVideoInputFrame *videoFrame, void **buffer)
+{
+#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
+    return videoFrame->GetBytes(buffer);
+#else
+    IDeckLinkVideoBuffer *videoBuffer = NULL;
+    HRESULT res = videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void **)&videoBuffer);
+    if (res == S_OK) {
+        res = videoBuffer->GetBytes(buffer);
+        videoBuffer->Release();
+    }
+    return res;
+#endif
+}
 
 extern "C" {
 static void decklink_object_free(void *opaque, uint8_t *data)
@@ -775,7 +799,7 @@ HRESULT decklink_input_callback::VideoInputFrameArrived(
                     (double)qsize / 1024 / 1024);
         }
 
-        videoFrame->GetBytes(&frameBytes);
+        decklink_get_video_frame_bytes(videoFrame, &frameBytes);
         videoFrame->GetStreamTime(&frameTime, &frameDuration,
                                   ctx->video_st->time_base.den);
 
@@ -794,7 +818,7 @@ HRESULT decklink_input_callback::VideoInputFrameArrived(
                 }
             } else if (ctx->signal_loss_action == SIGNAL_LOSS_REPEAT && last_video_frame) {
                 videoFrame = last_video_frame;
-                videoFrame->GetBytes(&frameBytes);
+                decklink_get_video_frame_bytes(videoFrame, &frameBytes);
             }
 
             if (!no_video) {
@@ -1067,7 +1091,9 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
 {
     struct decklink_cctx *cctx = (struct decklink_cctx *)avctx->priv_data;
     struct decklink_ctx *ctx;
+#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
     class decklink_allocator *allocator;
+#endif
     class decklink_input_callback *input_callback;
     AVStream *st;
     HRESULT result;
@@ -1169,6 +1195,7 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
         goto error;
     }
 
+#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
     allocator = new decklink_allocator();
     ret = (ctx->dli->SetVideoInputFrameMemoryAllocator(allocator) == S_OK ? 0 : AVERROR_EXTERNAL);
     allocator->Release();
@@ -1176,6 +1203,7 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Cannot set custom memory allocator\n");
         goto error;
     }
+#endif
 
     if (!cctx->format_code) {
         if (decklink_autodetect(cctx) < 0) {

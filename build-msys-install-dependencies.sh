@@ -157,13 +157,13 @@ echo ""
 
 if [ "$BUILD_X265_FROM_SOURCE" = "true" ]; then
     echo "Next steps:"
-    echo "  1) ./build-msys-x265-with-alpha.sh  (build x265 with alpha support)"
+    echo "  1) ./build-msys-prepare-x265-with-alpha.sh  (build x265 with alpha support)"
     echo "  2) ./build-msys-shared.sh           (build FFmpeg)"
     echo ""
     echo "Run x265 build now? (Y/n)"
     read -r RUN_X265
     if [ -z "$RUN_X265" ] || [ "$RUN_X265" = "y" ] || [ "$RUN_X265" = "Y" ]; then
-        ./build-msys-x265-with-alpha.sh
+        ./build-msys-prepare-x265-with-alpha.sh
     fi
 else
     echo "You can now build FFmpeg with:"

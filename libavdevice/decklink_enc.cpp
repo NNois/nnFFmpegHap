@@ -48,7 +48,14 @@ extern "C" {
 #endif
 
 /* DeckLink callback class declaration */
+/* On SDK 15+ (BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000) the SDK reads a
+   caller-provided frame's pixels through the IDeckLinkVideoBuffer interface
+   (IDeckLinkVideoFrame::GetBytes was removed), so we implement it as well and
+   hand it out from QueryInterface. GetBytes() below serves both interfaces. */
 class decklink_frame : public IDeckLinkVideoFrame
+#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000
+                     , public IDeckLinkVideoBuffer
+#endif
 {
 public:
     decklink_frame(struct decklink_ctx *ctx, AVFrame *avframe, AVCodecID codec_id, int height, int width) :
@@ -92,6 +99,17 @@ public:
         return S_OK;
     }
 
+#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000
+    /* IDeckLinkVideoBuffer methods (SDK 15+). GetBytes() above is shared. */
+    virtual HRESULT STDMETHODCALLTYPE GetSize(ULONGLONG *bufferSize)
+    {
+        *bufferSize = (ULONGLONG)GetRowBytes() * GetHeight();
+        return S_OK;
+    }
+    virtual HRESULT STDMETHODCALLTYPE StartAccess(BMDBufferAccessFlags flags) { return S_OK; }
+    virtual HRESULT STDMETHODCALLTYPE EndAccess(BMDBufferAccessFlags flags)   { return S_OK; }
+#endif
+
     virtual HRESULT STDMETHODCALLTYPE GetTimecode     (BMDTimecodeFormat format, IDeckLinkTimecode **timecode) { return S_FALSE; }
     virtual HRESULT STDMETHODCALLTYPE GetAncillaryData(IDeckLinkVideoFrameAncillary **ancillary)
     {
@@ -111,7 +129,17 @@ public:
         _ancillary->AddRef();
         return S_OK;
     }
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
+    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv)
+    {
+#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000
+        if (ppv && IsEqualIID(iid, IID_IDeckLinkVideoBuffer)) {
+            *ppv = static_cast<IDeckLinkVideoBuffer *>(this);
+            AddRef();
+            return S_OK;
+        }
+#endif
+        return E_NOINTERFACE;
+    }
     virtual ULONG   STDMETHODCALLTYPE AddRef(void)                            { return ++_refs; }
     virtual ULONG   STDMETHODCALLTYPE Release(void)
     {
