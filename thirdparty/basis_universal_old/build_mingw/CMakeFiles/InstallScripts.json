@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"C:/ff/ff/thirdparty/basis_universal/build_mingw/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
