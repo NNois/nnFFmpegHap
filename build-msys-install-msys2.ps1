@@ -30,7 +30,7 @@ function Test-Admin {
 }
 
 Write-Host "=========================================="
-Write-Host "FFmpeg - Alternative Development Edition"
+Write-Host "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
 Write-Host "MSYS2 Bootstrap"
 Write-Host "=========================================="
 Write-Host ""

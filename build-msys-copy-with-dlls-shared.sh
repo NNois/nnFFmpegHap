@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copy FFmpeg executables with required DLLs to make them portable
-# FFmpeg - Alternative Development Edition
+# FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2
 
 set -e
 
@@ -20,7 +20,7 @@ if [ ! -d "$FFMPEG_BIN" ]; then
 fi
 
 echo "=========================================="
-echo "FFmpeg - Alternative Development Edition"
+echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
 echo "Copying with DLLs"
 echo "=========================================="
 echo ""

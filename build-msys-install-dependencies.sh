@@ -1,12 +1,12 @@
 #!/bin/bash
 # Install all MSYS2 dependencies for FFmpeg compilation with HAP support
-# FFmpeg - Alternative Development Edition
+# FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2
 # Run this in MSYS2 MINGW64 terminal
 
 set -e
 
 echo "=========================================="
-echo "FFmpeg - Alternative Development Edition"
+echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
 echo "Build Dependencies Installer"
 echo "=========================================="
 echo ""

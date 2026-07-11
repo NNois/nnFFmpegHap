@@ -1,6 +1,6 @@
 #!/bin/bash
 # Rebuild FFmpeg with shared DLLs (required for mpv to use custom codecs)
-# FFmpeg - Alternative Development Edition
+# FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2
 # This produces DLLs that must be bundled alongside the executables
 
 set -e
@@ -74,7 +74,7 @@ else
 fi
 
 echo "=========================================="
-echo "FFmpeg - Alternative Development Edition"
+echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
 echo "Rebuilding with SHARED DLLs (mpv-compatible)"
 echo "=========================================="
 echo ""
@@ -191,7 +191,7 @@ echo "=========================================="
 echo "✓ Build Complete!"
 echo "=========================================="
 echo ""
-echo "FFmpeg - Alternative Development Edition"
+echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
 echo "Build type: SHARED DLLs (bundle required)"
 echo "Build features:"
 echo "  - Hap R support (FourCC: 'Hap7') - BC7 via basis_universal"
@@ -258,7 +258,7 @@ fi
 
 echo ""
 echo "=========================================="
-echo "Alternative Development Edition"
+echo "♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
 echo "Portable Build Complete"
 echo "=========================================="
 echo ""
