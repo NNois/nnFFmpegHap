@@ -110,6 +110,25 @@ fi
 echo "  Generated: $(basename "$INC_DIR")/DeckLinkAPI.h   ($(wc -l < "$INC_DIR/DeckLinkAPI.h") lines)"
 echo "  Generated: $(basename "$INC_DIR")/DeckLinkAPI_i.c ($(wc -l < "$INC_DIR/DeckLinkAPI_i.c") lines)"
 
+# Step 3b: shim for the versioned header FFmpeg 8.1+ includes directly.
+# FFmpeg's decklink code does `#include <DeckLinkAPI_v14_2_1.h>` on SDK >= 14.3
+# to use the versioned interfaces (IDeckLinkVideoFrame_v14_2_1, etc.). On the
+# Linux/Mac SDK that is a standalone header; on Windows the whole API - including
+# the *_v14_2_1 interfaces - is generated into the single DeckLinkAPI.h (because
+# DeckLinkAPI.idl #includes the versioned .idl files). So we provide a tiny shim
+# that redirects to DeckLinkAPI.h; its top-level include guard makes the second
+# inclusion a no-op (no duplicate definitions).
+echo "Step 3b: Writing DeckLinkAPI_v14_2_1.h shim ..."
+cat > "$INC_DIR/DeckLinkAPI_v14_2_1.h" <<'EOF'
+/* Generated shim - the _v14_2_1 interfaces live in the combined DeckLinkAPI.h
+   on Windows (widl-generated from DeckLinkAPI.idl). */
+#ifndef __DeckLinkAPI_v14_2_1_shim_h__
+#define __DeckLinkAPI_v14_2_1_shim_h__
+#include "DeckLinkAPI.h"
+#endif
+EOF
+echo "  Generated: $(basename "$INC_DIR")/DeckLinkAPI_v14_2_1.h (shim -> DeckLinkAPI.h)"
+
 echo ""
 echo "=========================================="
 echo "✓ DeckLink SDK prepared"

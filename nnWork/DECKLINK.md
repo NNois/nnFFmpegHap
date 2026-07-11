@@ -72,20 +72,22 @@ Options de sortie utiles : `-preroll`, `-duplex_mode`, `-timing_offset`.
 
 - **Génération des headers** : côté Windows le SDK ne fournit que des `.idl`
   (COM). `build-msys-prepare-decklinksdk.sh` les compile en `DeckLinkAPI.h` +
-  `DeckLinkAPI_i.c` avec `widl` (paquet MSYS2 `mingw-w64-x86_64-tools`).
+  `DeckLinkAPI_i.c` avec `widl` (paquet MSYS2 `mingw-w64-x86_64-tools`), plus un
+  shim `DeckLinkAPI_v14_2_1.h` (voir ci-dessous).
 - **SDK 16.0** = `BLACKMAGIC_DECKLINK_API_VERSION 0x10000000` : au-dessus du
   minimum FFmpeg (10.11) et sur les chemins de code « modernes ».
-- **Patch de compat SDK 15+/16** : le SDK 15.0 (`0x0f000000`) a retiré
-  `IDeckLinkVideoFrame::GetBytes()` (déplacé vers `IDeckLinkVideoBuffer`) et
-  supprimé `IDeckLinkMemoryAllocator` / `SetVideoInputFrameMemoryAllocator`.
-  FFmpeg 8.0 utilise l'ancienne API, donc `libavdevice/decklink_dec.cpp` et
-  `decklink_enc.cpp` ont été patchés (gardés par
-  `#if BLACKMAGIC_DECKLINK_API_VERSION`) :
-  - capture : accès aux pixels via `IDeckLinkVideoBuffer` (QueryInterface) ;
-  - allocateur mémoire custom désactivé en SDK 15+ (allocateur par défaut) ;
-  - sortie : la frame custom implémente aussi `IDeckLinkVideoBuffer`.
-  Le code reste rétro-compatible avec les SDK ≤ 14.x. La **sortie** (playout)
-  sur SDK 16 est à vérifier en conditions réelles.
+- **Compat SDK 15+/16 (gérée par upstream depuis FFmpeg 8.1)** : le SDK 15.0 a
+  retiré `IDeckLinkVideoFrame::GetBytes()` et l'ancien `IDeckLinkMemoryAllocator`.
+  FFmpeg **8.1** gère ça nativement en utilisant les interfaces **versionnées**
+  `IDeckLinkVideoFrame_v14_2_1` / `IDeckLinkMemoryAllocator_v14_2_1` (approche
+  officielle Blackmagic). Notre patch SDK16 maison de la 8.0 a donc été **abandonné**
+  au profit du code upstream lors du merge 8.1.2.
+  - Upstream inclut `<DeckLinkAPI_v14_2_1.h>` (header séparé côté Linux/Mac). Sous
+    Windows, `widl` génère **tout** dans le seul `DeckLinkAPI.h` (car
+    `DeckLinkAPI.idl` `#include` les `.idl` versionnés). Le script prepare écrit
+    donc un shim `DeckLinkAPI_v14_2_1.h` qui redirige vers `DeckLinkAPI.h`.
+  - ⚠️ Cette combinaison (widl + interfaces versionnées + SDK 16) n'a pas encore
+    été validée à la compilation — à confirmer au premier build.
 - **Threads** : la build utilise `--disable-w32threads --enable-pthreads`
   (winpthreads). C'est **obligatoire** pour DeckLink : les devices sont en C++
   et incluent `libavutil/thread.h` ; le chemin par défaut `w32threads`
