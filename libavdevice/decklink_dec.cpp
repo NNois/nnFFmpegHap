@@ -31,7 +31,11 @@ extern "C" {
 #include "libavformat/internal.h"
 }
 
+#include <DeckLinkAPIVersion.h>
 #include <DeckLinkAPI.h>
+#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0e030000
+#include <DeckLinkAPI_v14_2_1.h>
+#endif
 
 extern "C" {
 #include "config.h"
@@ -105,12 +109,7 @@ static VANCLineNumber vanc_line_numbers[] = {
     {bmdModeUnknown, 0, -1, -1, -1}
 };
 
-/* SDK 15 (BLACKMAGIC_DECKLINK_API_VERSION 0x0f000000) overhauled DeckLink's
-   memory management: IDeckLinkMemoryAllocator and
-   IDeckLinkInput::SetVideoInputFrameMemoryAllocator were removed. On newer
-   SDKs we simply let DeckLink use its default allocator. */
-#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
-class decklink_allocator : public IDeckLinkMemoryAllocator
+class decklink_allocator : public IDeckLinkMemoryAllocator_v14_2_1
 {
 public:
         decklink_allocator(): _refs(1) { }
@@ -134,7 +133,21 @@ public:
         virtual HRESULT STDMETHODCALLTYPE Decommit() { return S_OK; }
 
         // IUnknown methods
-        virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
+        virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv)
+        {
+            if (DECKLINK_IsEqualIID(riid, IID_IUnknown)) {
+                *ppv = static_cast<IUnknown*>(this);
+            } else if (DECKLINK_IsEqualIID(riid, IID_IDeckLinkMemoryAllocator_v14_2_1)) {
+                *ppv = static_cast<IDeckLinkMemoryAllocator_v14_2_1*>(this);
+            } else {
+                *ppv = NULL;
+                return E_NOINTERFACE;
+            }
+
+            AddRef();
+            return S_OK;
+        }
+
         virtual ULONG   STDMETHODCALLTYPE AddRef(void) { return ++_refs; }
         virtual ULONG   STDMETHODCALLTYPE Release(void)
         {
@@ -147,25 +160,6 @@ public:
 private:
         std::atomic<int>  _refs;
 };
-#endif /* BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000 */
-
-/* SDK 15 moved IDeckLinkVideoFrame::GetBytes() to the new IDeckLinkVideoBuffer
-   interface; query for it on newer SDKs. The returned pointer stays valid for
-   the lifetime of videoFrame. */
-static HRESULT decklink_get_video_frame_bytes(IDeckLinkVideoInputFrame *videoFrame, void **buffer)
-{
-#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
-    return videoFrame->GetBytes(buffer);
-#else
-    IDeckLinkVideoBuffer *videoBuffer = NULL;
-    HRESULT res = videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void **)&videoBuffer);
-    if (res == S_OK) {
-        res = videoBuffer->GetBytes(buffer);
-        videoBuffer->Release();
-    }
-    return res;
-#endif
-}
 
 extern "C" {
 static void decklink_object_free(void *opaque, uint8_t *data)
@@ -496,7 +490,7 @@ skip_packet:
 }
 
 
-static void handle_klv(AVFormatContext *avctx, decklink_ctx *ctx, IDeckLinkVideoInputFrame *videoFrame, int64_t pts)
+static void handle_klv(AVFormatContext *avctx, decklink_ctx *ctx, IDeckLinkVideoInputFrame_v14_2_1 *videoFrame, int64_t pts)
 {
     const uint8_t KLV_DID = 0x44;
     const uint8_t KLV_IN_VANC_SDID = 0x04;
@@ -598,17 +592,30 @@ static void handle_klv(AVFormatContext *avctx, decklink_ctx *ctx, IDeckLinkVideo
     }
 }
 
-class decklink_input_callback : public IDeckLinkInputCallback
+class decklink_input_callback : public IDeckLinkInputCallback_v14_2_1
 {
 public:
         explicit decklink_input_callback(AVFormatContext *_avctx);
         ~decklink_input_callback();
 
-        virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
+        virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv)
+        {
+            if (DECKLINK_IsEqualIID(riid, IID_IUnknown)) {
+                *ppv = static_cast<IUnknown*>(this);
+            } else if (DECKLINK_IsEqualIID(riid, IID_IDeckLinkInputCallback_v14_2_1)) {
+                *ppv = static_cast<IDeckLinkInputCallback_v14_2_1*>(this);
+            } else {
+                *ppv = NULL;
+                return E_NOINTERFACE;
+            }
+
+            AddRef();
+            return S_OK;
+        }
         virtual ULONG STDMETHODCALLTYPE AddRef(void);
         virtual ULONG STDMETHODCALLTYPE  Release(void);
         virtual HRESULT STDMETHODCALLTYPE VideoInputFormatChanged(BMDVideoInputFormatChangedEvents, IDeckLinkDisplayMode*, BMDDetectedVideoInputFormatFlags);
-        virtual HRESULT STDMETHODCALLTYPE VideoInputFrameArrived(IDeckLinkVideoInputFrame*, IDeckLinkAudioInputPacket*);
+        virtual HRESULT STDMETHODCALLTYPE VideoInputFrameArrived(IDeckLinkVideoInputFrame_v14_2_1*, IDeckLinkAudioInputPacket*);
 
 private:
         std::atomic<int>  _refs;
@@ -617,7 +624,7 @@ private:
         int no_video;
         int64_t initial_video_pts;
         int64_t initial_audio_pts;
-        IDeckLinkVideoInputFrame* last_video_frame;
+        IDeckLinkVideoInputFrame_v14_2_1* last_video_frame;
 };
 
 decklink_input_callback::decklink_input_callback(AVFormatContext *_avctx) : _refs(1)
@@ -649,7 +656,7 @@ ULONG decklink_input_callback::Release(void)
     return ret;
 }
 
-static int64_t get_pkt_pts(IDeckLinkVideoInputFrame *videoFrame,
+static int64_t get_pkt_pts(IDeckLinkVideoInputFrame_v14_2_1 *videoFrame,
                            IDeckLinkAudioInputPacket *audioFrame,
                            int64_t wallclock,
                            int64_t abs_wallclock,
@@ -703,7 +710,7 @@ static int64_t get_pkt_pts(IDeckLinkVideoInputFrame *videoFrame,
     return pts;
 }
 
-static int get_bmd_timecode(AVFormatContext *avctx, AVTimecode *tc, AVRational frame_rate, BMDTimecodeFormat tc_format, IDeckLinkVideoInputFrame *videoFrame)
+static int get_bmd_timecode(AVFormatContext *avctx, AVTimecode *tc, AVRational frame_rate, BMDTimecodeFormat tc_format, IDeckLinkVideoInputFrame_v14_2_1 *videoFrame)
 {
     IDeckLinkTimecode *timecode;
     int ret = AVERROR(ENOENT);
@@ -725,7 +732,7 @@ static int get_bmd_timecode(AVFormatContext *avctx, AVTimecode *tc, AVRational f
     return ret;
 }
 
-static int get_frame_timecode(AVFormatContext *avctx, decklink_ctx *ctx, AVTimecode *tc, IDeckLinkVideoInputFrame *videoFrame)
+static int get_frame_timecode(AVFormatContext *avctx, decklink_ctx *ctx, AVTimecode *tc, IDeckLinkVideoInputFrame_v14_2_1 *videoFrame)
 {
     AVRational frame_rate = ctx->video_st->r_frame_rate;
     int ret;
@@ -750,7 +757,7 @@ static int get_frame_timecode(AVFormatContext *avctx, decklink_ctx *ctx, AVTimec
 }
 
 HRESULT decklink_input_callback::VideoInputFrameArrived(
-    IDeckLinkVideoInputFrame *videoFrame, IDeckLinkAudioInputPacket *audioFrame)
+    IDeckLinkVideoInputFrame_v14_2_1 *videoFrame, IDeckLinkAudioInputPacket *audioFrame)
 {
     void *frameBytes;
     void *audioFrameBytes;
@@ -799,7 +806,7 @@ HRESULT decklink_input_callback::VideoInputFrameArrived(
                     (double)qsize / 1024 / 1024);
         }
 
-        decklink_get_video_frame_bytes(videoFrame, &frameBytes);
+        videoFrame->GetBytes(&frameBytes);
         videoFrame->GetStreamTime(&frameTime, &frameDuration,
                                   ctx->video_st->time_base.den);
 
@@ -818,7 +825,7 @@ HRESULT decklink_input_callback::VideoInputFrameArrived(
                 }
             } else if (ctx->signal_loss_action == SIGNAL_LOSS_REPEAT && last_video_frame) {
                 videoFrame = last_video_frame;
-                decklink_get_video_frame_bytes(videoFrame, &frameBytes);
+                videoFrame->GetBytes(&frameBytes);
             }
 
             if (!no_video) {
@@ -1091,9 +1098,7 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
 {
     struct decklink_cctx *cctx = (struct decklink_cctx *)avctx->priv_data;
     struct decklink_ctx *ctx;
-#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
     class decklink_allocator *allocator;
-#endif
     class decklink_input_callback *input_callback;
     AVStream *st;
     HRESULT result;
@@ -1167,7 +1172,7 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
         goto error;
 
     /* Get input device. */
-    if (ctx->dl->QueryInterface(IID_IDeckLinkInput, (void **) &ctx->dli) != S_OK) {
+    if (ctx->dl->QueryInterface(IID_IDeckLinkInput_v14_2_1, (void **) &ctx->dli) != S_OK) {
         av_log(avctx, AV_LOG_ERROR, "Could not open input device from '%s'\n",
                avctx->url);
         ret = AVERROR(EIO);
@@ -1195,7 +1200,6 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
         goto error;
     }
 
-#if BLACKMAGIC_DECKLINK_API_VERSION < 0x0f000000
     allocator = new decklink_allocator();
     ret = (ctx->dli->SetVideoInputFrameMemoryAllocator(allocator) == S_OK ? 0 : AVERROR_EXTERNAL);
     allocator->Release();
@@ -1203,7 +1207,6 @@ av_cold int ff_decklink_read_header(AVFormatContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Cannot set custom memory allocator\n");
         goto error;
     }
-#endif
 
     if (!cctx->format_code) {
         if (decklink_autodetect(cctx) < 0) {

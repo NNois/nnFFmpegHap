@@ -28,7 +28,11 @@ extern "C" {
 #include "libavformat/internal.h"
 }
 
+#include <DeckLinkAPIVersion.h>
 #include <DeckLinkAPI.h>
+#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0e030000
+#include <DeckLinkAPI_v14_2_1.h>
+#endif
 
 extern "C" {
 #include "libavformat/avformat.h"
@@ -48,14 +52,7 @@ extern "C" {
 #endif
 
 /* DeckLink callback class declaration */
-/* On SDK 15+ (BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000) the SDK reads a
-   caller-provided frame's pixels through the IDeckLinkVideoBuffer interface
-   (IDeckLinkVideoFrame::GetBytes was removed), so we implement it as well and
-   hand it out from QueryInterface. GetBytes() below serves both interfaces. */
-class decklink_frame : public IDeckLinkVideoFrame
-#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000
-                     , public IDeckLinkVideoBuffer
-#endif
+class decklink_frame : public IDeckLinkVideoFrame_v14_2_1
 {
 public:
     decklink_frame(struct decklink_ctx *ctx, AVFrame *avframe, AVCodecID codec_id, int height, int width) :
@@ -99,17 +96,6 @@ public:
         return S_OK;
     }
 
-#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000
-    /* IDeckLinkVideoBuffer methods (SDK 15+). GetBytes() above is shared. */
-    virtual HRESULT STDMETHODCALLTYPE GetSize(ULONGLONG *bufferSize)
-    {
-        *bufferSize = (ULONGLONG)GetRowBytes() * GetHeight();
-        return S_OK;
-    }
-    virtual HRESULT STDMETHODCALLTYPE StartAccess(BMDBufferAccessFlags flags) { return S_OK; }
-    virtual HRESULT STDMETHODCALLTYPE EndAccess(BMDBufferAccessFlags flags)   { return S_OK; }
-#endif
-
     virtual HRESULT STDMETHODCALLTYPE GetTimecode     (BMDTimecodeFormat format, IDeckLinkTimecode **timecode) { return S_FALSE; }
     virtual HRESULT STDMETHODCALLTYPE GetAncillaryData(IDeckLinkVideoFrameAncillary **ancillary)
     {
@@ -129,16 +115,19 @@ public:
         _ancillary->AddRef();
         return S_OK;
     }
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv)
+    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv)
     {
-#if BLACKMAGIC_DECKLINK_API_VERSION >= 0x0f000000
-        if (ppv && IsEqualIID(iid, IID_IDeckLinkVideoBuffer)) {
-            *ppv = static_cast<IDeckLinkVideoBuffer *>(this);
-            AddRef();
-            return S_OK;
+        if (DECKLINK_IsEqualIID(riid, IID_IUnknown)) {
+            *ppv = static_cast<IUnknown*>(this);
+        } else if (DECKLINK_IsEqualIID(riid, IID_IDeckLinkVideoFrame_v14_2_1)) {
+            *ppv = static_cast<IDeckLinkVideoFrame_v14_2_1*>(this);
+        } else {
+            *ppv = NULL;
+            return E_NOINTERFACE;
         }
-#endif
-        return E_NOINTERFACE;
+
+        AddRef();
+        return S_OK;
     }
     virtual ULONG   STDMETHODCALLTYPE AddRef(void)                            { return ++_refs; }
     virtual ULONG   STDMETHODCALLTYPE Release(void)
@@ -166,10 +155,10 @@ private:
     std::atomic<int>  _refs;
 };
 
-class decklink_output_callback : public IDeckLinkVideoOutputCallback
+class decklink_output_callback : public IDeckLinkVideoOutputCallback_v14_2_1
 {
 public:
-    virtual HRESULT STDMETHODCALLTYPE ScheduledFrameCompleted(IDeckLinkVideoFrame *_frame, BMDOutputFrameCompletionResult result)
+    virtual HRESULT STDMETHODCALLTYPE ScheduledFrameCompleted(IDeckLinkVideoFrame_v14_2_1 *_frame, BMDOutputFrameCompletionResult result)
     {
         decklink_frame *frame = static_cast<decklink_frame *>(_frame);
         struct decklink_ctx *ctx = frame->_ctx;
@@ -187,7 +176,20 @@ public:
         return S_OK;
     }
     virtual HRESULT STDMETHODCALLTYPE ScheduledPlaybackHasStopped(void)       { return S_OK; }
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
+    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv)
+    {
+        if (DECKLINK_IsEqualIID(riid, IID_IUnknown)) {
+            *ppv = static_cast<IUnknown*>(this);
+        } else if (DECKLINK_IsEqualIID(riid, IID_IDeckLinkVideoOutputCallback_v14_2_1)) {
+            *ppv = static_cast<IDeckLinkVideoOutputCallback_v14_2_1*>(this);
+        } else {
+            *ppv = NULL;
+            return E_NOINTERFACE;
+        }
+
+        AddRef();
+        return S_OK;
+    }
     virtual ULONG   STDMETHODCALLTYPE AddRef(void)                            { return 1; }
     virtual ULONG   STDMETHODCALLTYPE Release(void)                           { return 1; }
 };
@@ -767,7 +769,7 @@ static int decklink_write_video_packet(AVFormatContext *avctx, AVPacket *pkt)
         ctx->first_pts = pkt->pts;
 
     /* Schedule frame for playback. */
-    hr = ctx->dlo->ScheduleVideoFrame((class IDeckLinkVideoFrame *) frame,
+    hr = ctx->dlo->ScheduleVideoFrame(frame,
                                       pkt->pts * ctx->bmd_tb_num,
                                       ctx->bmd_tb_num, ctx->bmd_tb_den);
     /* Pass ownership to DeckLink, or release on failure */
@@ -902,7 +904,7 @@ av_cold int ff_decklink_write_header(AVFormatContext *avctx)
         return ret;
 
     /* Get output device. */
-    if (ctx->dl->QueryInterface(IID_IDeckLinkOutput, (void **) &ctx->dlo) != S_OK) {
+    if (ctx->dl->QueryInterface(IID_IDeckLinkOutput_v14_2_1, (void **) &ctx->dlo) != S_OK) {
         av_log(avctx, AV_LOG_ERROR, "Could not open output device from '%s'\n",
                avctx->url);
         ret = AVERROR(EIO);
