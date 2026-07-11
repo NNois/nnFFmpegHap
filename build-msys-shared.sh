@@ -163,6 +163,7 @@ echo ""
     $NDISDK_ENABLE \
     $DECKLINK_ENABLE \
     --extra-cflags="-O3 $BASISU_CFLAGS $BINK2SDK_CFLAGS $NDISDK_CFLAGS $DECKLINK_CFLAGS" \
+    --extra-cxxflags="-O3 $DECKLINK_CFLAGS" \
     --extra-ldflags="$BASISU_LDFLAGS $BINK2SDK_LDFLAGS $NDISDK_LDFLAGS" \
     --extra-libs="$BASISU_LIBS $BINK2SDK_LIBS"
 
