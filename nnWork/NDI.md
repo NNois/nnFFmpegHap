@@ -43,17 +43,15 @@ ffplay -fflags nobuffer -flags low_delay -framedrop \
 mpv charge le FFmpeg custom de cette build (DLLs partagées), donc le device NDI
 s'ouvre via le protocole `av://` (`av://<device>:<nom source>`) :
 ```bash
-mpv av://libndi_newtek:"MACHINE (Nom Source)"
+mpv --profile=low-latency --untimed av://libndi_newtek:"MACHINE (Nom Source)"
 ```
-Passer des options du device via `--demuxer-lavf-o` (ex. bande passante basse) :
-```bash
-mpv --demuxer-lavf-o=bandwidth=1 av://libndi_newtek:"MACHINE (Nom Source)"
-```
-Faible latence :
-```bash
-mpv --profile=low-latency --no-cache --untimed \
-    av://libndi_newtek:"MACHINE (Nom Source)"
-```
+- `--profile=low-latency` : présets faible latence (cache off, readahead ~0).
+- `--untimed` : affiche les frames dès reçues, sans se caler sur les PTS.
+
+⚠️ Sans ces flags, la forme minimale `mpv av://libndi_newtek:"…"` affiche
+souvent **une seule frame puis se fige** : mpv est prévu pour des fichiers (il
+respecte les PTS et met en cache), or NDI est un flux **live** à timecodes
+absolus. Options du device via `--demuxer-lavf-o` (ex. `bandwidth=0`).
 
 ### Options d'entrée
 | Option | Déf. | Description |
@@ -71,6 +69,16 @@ mpv --profile=low-latency --no-cache --untimed \
 Le nom de fichier est le **nom NDI** annoncé sur le réseau.
 NDI attend nativement du `uyvy422` ; formats acceptés : `uyvy422`, `bgra`,
 `bgr0`, `rgba`, `rgb0`. Il faut donc convertir le pixel format en amont.
+
+### Émettre une mire de test (sans fichier source)
+Le plus rapide pour vérifier que la sortie NDI fonctionne : mire animée +
+audio 1 kHz, générés par lavfi.
+```bash
+ffmpeg -re -f lavfi -i "testsrc2=size=1280x720:rate=50" \
+       -f lavfi -i "sine=frequency=1000:sample_rate=48000" \
+       -vf "format=uyvy422" -f libndi_newtek "FFMPEG Mire"
+```
+Barres SMPTE HD à la place de la mire animée : `-i "smptehdbars=size=1920x1080:rate=50"`.
 
 ### Émettre un fichier en NDI
 ```bash
