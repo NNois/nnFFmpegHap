@@ -124,6 +124,7 @@ struct decklink_ctx {
     IDeckLinkInput_v14_2_1 *dli;
     IDeckLinkConfiguration *cfg;
     IDeckLinkProfileAttributes *attr;
+    IDeckLinkKeyer *keyer;   /* AD patch: hardware keyer (NULL = off) */
     decklink_output_callback *output_callback;
 
     /* DeckLink mode information */

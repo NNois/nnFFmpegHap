@@ -71,7 +71,7 @@ public:
     virtual BMDPixelFormat STDMETHODCALLTYPE GetPixelFormat(void)
     {
         if (_codec_id == AV_CODEC_ID_WRAPPED_AVFRAME)
-            return bmdFormat8BitYUV;
+            return _ctx->raw_format;   /* AD patch: 8BitYUV or 8BitBGRA */
         else
             return bmdFormat10BitYUV;
     }
@@ -206,12 +206,22 @@ static int decklink_setup_video(AVFormatContext *avctx, AVStream *st)
     }
 
     if (c->codec_id == AV_CODEC_ID_WRAPPED_AVFRAME) {
-        if (c->format != AV_PIX_FMT_UYVY422) {
+        /* AD patch: BGRA accepted too — required by the hardware keyer (the
+         * alpha channel is the key) and usable for plain RGB output. */
+        if (c->format == AV_PIX_FMT_UYVY422) {
+            ctx->raw_format = bmdFormat8BitYUV;
+        } else if (c->format == AV_PIX_FMT_BGRA) {
+            ctx->raw_format = bmdFormat8BitBGRA;
+        } else {
             av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format!"
-                   " Only AV_PIX_FMT_UYVY422 is supported.\n");
+                   " Only AV_PIX_FMT_UYVY422 and AV_PIX_FMT_BGRA are supported.\n");
             return -1;
         }
-        ctx->raw_format = bmdFormat8BitYUV;
+        if (cctx->keyer_mode && c->format != AV_PIX_FMT_BGRA) {
+            av_log(avctx, AV_LOG_ERROR, "The keyer needs BGRA frames"
+                   " (the alpha channel is the key) — add -pix_fmt bgra.\n");
+            return -1;
+        }
     } else if (c->codec_id != AV_CODEC_ID_V210) {
         av_log(avctx, AV_LOG_ERROR, "Unsupported codec type!"
                " Only V210 and wrapped frame with AV_PIX_FMT_UYVY422 are supported.\n");
@@ -237,6 +247,26 @@ static int decklink_setup_video(AVFormatContext *avctx, AVStream *st)
     if (!ctx->supports_vanc && ctx->dlo->EnableVideoOutput(ctx->bmd_mode, bmdVideoOutputFlagDefault) != S_OK) {
         av_log(avctx, AV_LOG_ERROR, "Could not enable video output!\n");
         return -1;
+    }
+
+    /* AD patch: hardware keyer — internal (key over the SDI input) or
+     * external (fill + key split on the device's two outputs). */
+    if (cctx->keyer_mode) {
+        int external = cctx->keyer_mode == 2;
+        if (ctx->dl->QueryInterface(IID_IDeckLinkKeyer, (void **)&ctx->keyer) != S_OK) {
+            ctx->keyer = NULL;
+            av_log(avctx, AV_LOG_ERROR, "This device has no hardware keyer.\n");
+            return -1;
+        }
+        if (ctx->keyer->Enable(external) != S_OK) {
+            av_log(avctx, AV_LOG_ERROR, "Could not enable the %s keyer"
+                   " (unsupported by this device or profile).\n",
+                   external ? "external" : "internal");
+            return -1;
+        }
+        ctx->keyer->SetLevel(cctx->keyer_level);
+        av_log(avctx, AV_LOG_INFO, "%s keyer enabled (level %d).\n",
+               external ? "External" : "Internal", cctx->keyer_level);
     }
 
     /* Set callback. */
@@ -407,6 +437,14 @@ av_cold int ff_decklink_write_trailer(AVFormatContext *avctx)
         ctx->dlo->DisableVideoOutput();
         if (ctx->audio)
             ctx->dlo->DisableAudioOutput();
+    }
+
+    /* AD patch: release the hardware keyer (leave the key up: cutting it on
+     * process exit would flash the program out on air — the operator disables
+     * keying from the mixer/next session). */
+    if (ctx->keyer) {
+        ctx->keyer->Release();
+        ctx->keyer = NULL;
     }
 
     ff_decklink_cleanup(avctx);
@@ -721,7 +759,10 @@ static int decklink_write_video_packet(AVFormatContext *avctx, AVPacket *pkt)
     ctx->last_pts = FFMAX(ctx->last_pts, pkt->pts);
 
     if (st->codecpar->codec_id == AV_CODEC_ID_WRAPPED_AVFRAME) {
-        if (tmp->format != AV_PIX_FMT_UYVY422 ||
+        /* AD patch: the accepted format follows the negotiated raw_format. */
+        enum AVPixelFormat expected =
+            ctx->raw_format == bmdFormat8BitBGRA ? AV_PIX_FMT_BGRA : AV_PIX_FMT_UYVY422;
+        if (tmp->format != expected ||
             tmp->width  != ctx->bmd_width ||
             tmp->height != ctx->bmd_height) {
             av_log(avctx, AV_LOG_ERROR, "Got a frame with invalid pixel format or dimension.\n");

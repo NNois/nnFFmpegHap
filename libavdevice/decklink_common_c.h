@@ -75,6 +75,11 @@ struct decklink_cctx {
     int timing_offset;
     int wait_for_tc;
     DecklinkSignalLossAction signal_loss_action;
+    /* Hardware keyer (AD patch): 0 = off, 1 = internal (key over the SDI
+     * input), 2 = external (fill + key on the device's two outputs). The
+     * key is the BGRA alpha channel of the frames. */
+    int keyer_mode;
+    int keyer_level;
 };
 
 #endif /* AVDEVICE_DECKLINK_COMMON_C_H */

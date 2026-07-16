@@ -8,9 +8,13 @@ FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
 FFMPEG_BIN="$FFMPEG_PREFIX/bin"
 ISPCTEXCOMP_ROOT="${ISPCTEXCOMP_ROOT:-$PWD/thirdparty/ISPCTextureCompressor}"
 
-DEST_DIR="${1:-/c/AD/nnTools/tools/ffmpeg}"
+# Explicit destination as $1 = copy there directly (no prompts). Without
+# argument, each KNOWN destination is offered with a y/N prompt below.
+DEST_DIR="${1:-}"
+NNTOOLS_DIR="${NNTOOLS_DIR:-/c/AD/nnTools/tools/ffmpeg}"
+FLOCON_LIBS="${FLOCON_LIBS:-/c/AD/AdFlocon/libs}"
 
-if [ ! -d "$DEST_DIR" ]; then
+if [ -n "$DEST_DIR" ] && [ ! -d "$DEST_DIR" ]; then
     echo "Error: Destination directory does not exist: $DEST_DIR"
     exit 1
 fi
@@ -25,20 +29,11 @@ echo "Copying with DLLs"
 echo "=========================================="
 echo ""
 
-# Copy executables
-echo "Copying executables..."
-cp -v "$FFMPEG_BIN/ffmpeg.exe" "$DEST_DIR/"
-cp -v "$FFMPEG_BIN/ffplay.exe" "$DEST_DIR/"
-cp -v "$FFMPEG_BIN/ffprobe.exe" "$DEST_DIR/"
-
-# Copy DLLs - check install bin dir and fall back to mingw64
-echo ""
-echo "Copying required DLLs..."
-
 copy_dlls_from_dir_or_ldd() {
-    local dll_dir="$1"
-    local label="$2"
-    shift 2
+    local dest="$1"
+    local dll_dir="$2"
+    local label="$3"
+    shift 3
     local ldd_targets=("$@")
 
     shopt -s nullglob
@@ -46,7 +41,7 @@ copy_dlls_from_dir_or_ldd() {
     if [ ${#dlls[@]} -gt 0 ]; then
         echo "Found DLLs in $label:"
         for dll in "${dlls[@]}"; do
-            cp -v "$dll" "$DEST_DIR/"
+            cp -v "$dll" "$dest/"
         done
     else
         echo "No DLLs found in $label; finding DLLs from MINGW64..."
@@ -54,43 +49,85 @@ copy_dlls_from_dir_or_ldd() {
         required_dlls=$(ldd "${ldd_targets[@]}" 2>/dev/null | grep mingw64 | awk '{print $3}' | sort -u)
         for dll in $required_dlls; do
             if [ -f "$dll" ]; then
-                cp -v "$dll" "$DEST_DIR/"
+                cp -v "$dll" "$dest/"
             fi
         done
     fi
     shopt -u nullglob
 }
 
-# Copy DLLs from the install bin dir (shared build output).
-copy_dlls_from_dir_or_ldd "$FFMPEG_BIN" "$FFMPEG_BIN" "$FFMPEG_BIN/ffprobe.exe" "$FFMPEG_BIN/ffplay.exe"
+# The whole portable bundle (executables + DLLs + extras) into ONE directory.
+copy_bundle() {
+    local dest="$1"
 
-# Copy ISPCTextureCompressor runtime assets if present.
-if [ -f "$FFMPEG_BIN/ispc_texcomp.dll" ]; then
-    cp -v "$FFMPEG_BIN/ispc_texcomp.dll" "$DEST_DIR/"
-elif [ -f "$ISPCTEXCOMP_ROOT/lib/ispc_texcomp.dll" ]; then
-    cp -v "$ISPCTEXCOMP_ROOT/lib/ispc_texcomp.dll" "$DEST_DIR/"
+    echo "Copying executables to $dest..."
+    cp -v "$FFMPEG_BIN/ffmpeg.exe" "$dest/"
+    cp -v "$FFMPEG_BIN/ffplay.exe" "$dest/"
+    cp -v "$FFMPEG_BIN/ffprobe.exe" "$dest/"
+
+    echo ""
+    echo "Copying required DLLs..."
+    copy_dlls_from_dir_or_ldd "$dest" "$FFMPEG_BIN" "$FFMPEG_BIN" "$FFMPEG_BIN/ffprobe.exe" "$FFMPEG_BIN/ffplay.exe"
+
+    # Copy ISPCTextureCompressor runtime assets if present.
+    if [ -f "$FFMPEG_BIN/ispc_texcomp.dll" ]; then
+        cp -v "$FFMPEG_BIN/ispc_texcomp.dll" "$dest/"
+    elif [ -f "$ISPCTEXCOMP_ROOT/lib/ispc_texcomp.dll" ]; then
+        cp -v "$ISPCTEXCOMP_ROOT/lib/ispc_texcomp.dll" "$dest/"
+    fi
+
+    # Ensure SDL2.dll is included for ffplay (not linked by ffprobe)
+    if [ ! -f "$dest/SDL2.dll" ]; then
+        for sdl in /mingw64/bin/SDL2.dll /c/msys64/mingw64/bin/SDL2.dll; do
+            if [ -f "$sdl" ]; then
+                cp -v "$sdl" "$dest/"
+                break
+            fi
+        done
+    fi
+}
+
+report_dest() {
+    local dest="$1"
+    echo ""
+    echo "✓ Copied to: $dest"
+    ls -lh "$dest"/{ffmpeg.exe,ffplay.exe,ffprobe.exe,*.dll} 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
+    echo ""
+}
+
+# Prompted copy towards one known destination (skipped if absent/declined).
+offer_copy() {
+    local dest="$1"
+    local label="$2"
+    if [ ! -d "$dest" ]; then
+        echo "($label absent — ignoré : $dest)"
+        return
+    fi
+    echo "=========================================="
+    echo "$label : $dest"
+    echo "=========================================="
+    read -p "Copy into $label? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        copy_bundle "$dest"
+        report_dest "$dest"
+    else
+        echo "Skipping $label (later: $0 \"$dest\")."
+        echo ""
+    fi
+}
+
+if [ -n "$DEST_DIR" ]; then
+    # Explicit destination: direct copy, no questions asked.
+    copy_bundle "$DEST_DIR"
+    report_dest "$DEST_DIR"
+else
+    # AD tools (shared CLI toolbox) then AdFlocon libs/ (the runtime the app
+    # and its NSIS installer embed — mpv.exe there is built separately).
+    offer_copy "$NNTOOLS_DIR" "AD tools (nnTools)"
+    offer_copy "$FLOCON_LIBS" "AdFlocon libs"
 fi
 
-# Ensure SDL2.dll is included for ffplay (not linked by ffprobe)
-if [ ! -f "$DEST_DIR/SDL2.dll" ]; then
-    for sdl in /mingw64/bin/SDL2.dll /c/msys64/mingw64/bin/SDL2.dll; do
-        if [ -f "$sdl" ]; then
-            cp -v "$sdl" "$DEST_DIR/"
-            break
-        fi
-    done
-fi
-
-echo ""
-echo "=========================================="
-echo "✓ Copy Complete!"
-echo "=========================================="
-echo ""
-echo "Copied to: $DEST_DIR"
-echo ""
-echo "Files copied:"
-ls -lh "$DEST_DIR"/{ffmpeg.exe,ffplay.exe,ffprobe.exe,*.dll} 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
-echo ""
 echo "You can now use these executables from PowerShell or CMD."
 echo ""
 
