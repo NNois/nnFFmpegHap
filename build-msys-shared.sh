@@ -276,12 +276,12 @@ echo "and will work from PowerShell, CMD, and Python apps"
 echo "without requiring MSYS2."
 echo ""
 echo "To deploy to your app, use:"
-echo "  ./build-msys-copy-with-dlls-shared.sh /c/AD/nnTools/tools/ffmpeg"
+echo "  ./build-msys-copy-with-dlls-shared.sh"
 echo ""
 echo "Run it now? (Y/n)"
 read -r RUN_COPY
 RUN_COPY=${RUN_COPY:-Y}
 if [ -z "$RUN_COPY" ] || [ "$RUN_COPY" = "y" ] || [ "$RUN_COPY" = "Y" ]; then
-    ./build-msys-copy-with-dlls-shared.sh /c/AD/nnTools/tools/ffmpeg
+    ./build-msys-copy-with-dlls-shared.sh
 fi
 echo ""

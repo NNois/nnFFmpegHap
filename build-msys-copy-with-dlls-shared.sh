@@ -12,7 +12,7 @@ ISPCTEXCOMP_ROOT="${ISPCTEXCOMP_ROOT:-$PWD/thirdparty/ISPCTextureCompressor}"
 # argument, each KNOWN destination is offered with a y/N prompt below.
 DEST_DIR="${1:-}"
 NNTOOLS_DIR="${NNTOOLS_DIR:-/c/AD/nnTools/tools/ffmpeg}"
-FLOCON_LIBS="${FLOCON_LIBS:-/c/AD/AdFlocon/libs}"
+FLOCON_DIR="${FLOCON_DIR:-/c/AD/AdFlocon/libs/ffmpeg}"
 
 if [ -n "$DEST_DIR" ] && [ ! -d "$DEST_DIR" ]; then
     echo "Error: Destination directory does not exist: $DEST_DIR"
@@ -122,10 +122,10 @@ if [ -n "$DEST_DIR" ]; then
     copy_bundle "$DEST_DIR"
     report_dest "$DEST_DIR"
 else
-    # AD tools (shared CLI toolbox) then AdFlocon libs/ (the runtime the app
-    # and its NSIS installer embed — mpv.exe there is built separately).
+    # AD tools (shared CLI toolbox) then AdFlocon libs/ffmpeg/ (the runtime the
+    # app and its NSIS installer embed — mpv.exe there is built separately).
     offer_copy "$NNTOOLS_DIR" "AD tools (nnTools)"
-    offer_copy "$FLOCON_LIBS" "AdFlocon libs"
+    offer_copy "$FLOCON_DIR" "AdFlocon libs/ffmpeg"
 fi
 
 echo "You can now use these executables from PowerShell or CMD."
