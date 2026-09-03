@@ -114,9 +114,15 @@ else
     echo "⚠️  pkg-config not found"
 fi
 if command -v /mingw64/bin/x265 >/dev/null 2>&1; then
-    /mingw64/bin/x265 --help 2>/dev/null | grep -qi "alpha" \
+    /mingw64/bin/x265 --help 2>/dev/null | grep -qi -- "--alpha" \
         && echo "✓ /mingw64/bin/x265 reports alpha support" \
         || echo "⚠️  /mingw64/bin/x265 does not mention alpha"
+    # A 10-bit-only x265 accepts yuva420p but fills the alpha layer with the
+    # base luma (x265 only implements the 8-bit alpha input path at
+    # X265_DEPTH == 8). Multilib is what makes 8-bit alpha correct.
+    /mingw64/bin/x265 --version 2>&1 | grep -q "8bit+10bit+12bit" \
+        && echo "✓ /mingw64/bin/x265 is a 8+10+12 bit multilib" \
+        || echo "⚠️  /mingw64/bin/x265 is NOT multilib - 8-bit HEVC alpha will be wrong (run ./build-msys-prepare-x265-with-alpha.sh)"
 else
     echo "⚠️  /mingw64/bin/x265 not found"
 fi

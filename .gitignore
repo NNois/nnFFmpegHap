@@ -40,6 +40,7 @@ nul
 /thirdparty/basis_universal/build_mingw/
 /thirdparty/basis_universal/build/
 /thirdparty/ndisdk/build_mingw/
+/thirdparty/x265/build_mingw/
 /thirdparty/decklinksdk/include/
 /thirdparty/ISPCTextureCompressor/lib/
 /build-*.log
