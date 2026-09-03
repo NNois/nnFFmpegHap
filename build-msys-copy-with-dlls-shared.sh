@@ -8,11 +8,23 @@ FFMPEG_PREFIX="${FFMPEG_PREFIX:-./build}"
 FFMPEG_BIN="$FFMPEG_PREFIX/bin"
 ISPCTEXCOMP_ROOT="${ISPCTEXCOMP_ROOT:-$PWD/thirdparty/ISPCTextureCompressor}"
 
+# Set by report_dest when a bundle still depends on MINGW64; checked on exit.
+BUNDLE_INCOMPLETE=0
+
 # Explicit destination as $1 = copy there directly (no prompts). Without
 # argument, each KNOWN destination is offered with a y/N prompt below.
 DEST_DIR="${1:-}"
 NNTOOLS_DIR="${NNTOOLS_DIR:-/c/AD/nnTools/tools/ffmpeg}"
 FLOCON_DIR="${FLOCON_DIR:-/c/AD/AdFlocon/libs/ffmpeg}"
+
+# mpv ships in the same bundle. It is deliberately copied by this script and
+# not by one of its own: mpv links against the FFmpeg DLLs sitting next to it,
+# so its dependencies can only be resolved correctly from the destination
+# directory, once those DLLs are in place.
+MPV_SRC="${MPV_SRC:-/c/ff/mpv}"
+MPV_BUILD_DIR="${MPV_BUILD_DIR:-$MPV_SRC/build}"
+MPV_EXE="$MPV_BUILD_DIR/mpv.exe"
+MPV_COM="$MPV_BUILD_DIR/mpv.com"
 
 if [ -n "$DEST_DIR" ] && [ ! -d "$DEST_DIR" ]; then
     echo "Error: Destination directory does not exist: $DEST_DIR"
@@ -29,31 +41,97 @@ echo "Copying with DLLs"
 echo "=========================================="
 echo ""
 
-copy_dlls_from_dir_or_ldd() {
+# Build mpv BEFORE copying, so a fresh mpv.exe lands in the same pass.
+if [ -z "$DEST_DIR" ] && [ -f "$MPV_SRC/build-mpv.sh" ]; then
+    echo "=========================================="
+    echo "mpv : $MPV_SRC"
+    echo "=========================================="
+    read -p "Rebuild mpv against this FFmpeg first? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        ( cd "$MPV_SRC" && ./build-mpv.sh )
+        echo ""
+    fi
+fi
+
+if [ -f "$MPV_EXE" ]; then
+    echo "mpv found, will be bundled: $MPV_EXE"
+    echo "  built $(date -r "$MPV_EXE" '+%Y-%m-%d %H:%M')"
+else
+    echo "mpv not built — bundling FFmpeg only."
+    echo "  (build it with: cd $MPV_SRC && ./build-mpv.sh)"
+fi
+echo ""
+
+# FFmpeg's own shared libraries, produced by the build.
+copy_own_dlls() {
     local dest="$1"
-    local dll_dir="$2"
-    local label="$3"
-    shift 3
-    local ldd_targets=("$@")
 
     shopt -s nullglob
-    local dlls=("$dll_dir"/*.dll)
-    if [ ${#dlls[@]} -gt 0 ]; then
-        echo "Found DLLs in $label:"
-        for dll in "${dlls[@]}"; do
-            cp -v "$dll" "$dest/"
-        done
-    else
-        echo "No DLLs found in $label; finding DLLs from MINGW64..."
-        local required_dlls
-        required_dlls=$(ldd "${ldd_targets[@]}" 2>/dev/null | grep mingw64 | awk '{print $3}' | sort -u)
-        for dll in $required_dlls; do
-            if [ -f "$dll" ]; then
+    local dlls=("$FFMPEG_BIN"/*.dll)
+    shopt -u nullglob
+
+    if [ ${#dlls[@]} -eq 0 ]; then
+        echo "Warning: no DLL in $FFMPEG_BIN (shared build expected)."
+        return
+    fi
+    for dll in "${dlls[@]}"; do
+        cp -v "$dll" "$dest/"
+    done
+}
+
+# Third-party runtime dependencies pulled out of MINGW64.
+#
+# These MUST be bundled, not left to the PATH. Without them the executables
+# only run where MSYS2 happens to be installed, and they silently bind to
+# whatever version the PATH offers first — which is how a stale libx265.dll
+# elsewhere on the PATH produced "entry point x265_api_get_216 not found".
+#
+# ldd runs from inside $dest so the FFmpeg DLLs copied just above resolve from
+# the application directory; everything else resolves from MINGW64. Each pass
+# can expose dependencies of the DLLs added by the previous one, so repeat
+# until nothing new is copied.
+copy_mingw_deps() {
+    local dest="$1"
+    local pass=0 added=1 dll required
+
+    while [ "$added" -ne 0 ] && [ "$pass" -lt 10 ]; do
+        added=0
+        pass=$((pass + 1))
+        required=$(cd "$dest" && ldd ./*.exe ./*.dll 2>/dev/null \
+                   | grep -i mingw64 | awk '{print $3}' | sort -u) || true
+        for dll in $required; do
+            [ -f "$dll" ] || continue
+            if [ ! -f "$dest/$(basename "$dll")" ]; then
                 cp -v "$dll" "$dest/"
+                added=$((added + 1))
             fi
         done
+    done
+
+    if [ "$pass" -ge 10 ]; then
+        echo "Warning: dependency scan did not settle after $pass passes."
     fi
-    shopt -u nullglob
+}
+
+# Fail loudly rather than shipping a bundle that only runs on this machine.
+verify_bundle() {
+    local dest="$1"
+    local missing=""
+    local dll
+
+    for dll in $(cd "$dest" && ldd ./*.exe ./*.dll 2>/dev/null \
+                 | grep -i mingw64 | awk '{print $3}' | sort -u); do
+        [ -f "$dest/$(basename "$dll")" ] || missing="$missing $(basename "$dll")"
+    done
+
+    if [ -n "$missing" ]; then
+        echo "✗ INCOMPLETE bundle in $dest, still resolved from MINGW64:"
+        echo "   $missing"
+        return 1
+    fi
+    echo "✓ Self-contained: no remaining MINGW64 dependency."
 }
 
 # The whole portable bundle (executables + DLLs + extras) into ONE directory.
@@ -65,9 +143,22 @@ copy_bundle() {
     cp -v "$FFMPEG_BIN/ffplay.exe" "$dest/"
     cp -v "$FFMPEG_BIN/ffprobe.exe" "$dest/"
 
+    # mpv goes in before the dependency scan below, so its own libraries
+    # (libass, libplacebo, lua51...) are picked up in the same pass.
+    if [ -f "$MPV_EXE" ]; then
+        cp -v "$MPV_EXE" "$dest/"
+        if [ -f "$MPV_COM" ]; then
+            cp -v "$MPV_COM" "$dest/"
+        fi
+    fi
+
     echo ""
-    echo "Copying required DLLs..."
-    copy_dlls_from_dir_or_ldd "$dest" "$FFMPEG_BIN" "$FFMPEG_BIN" "$FFMPEG_BIN/ffprobe.exe" "$FFMPEG_BIN/ffplay.exe"
+    echo "Copying FFmpeg DLLs..."
+    copy_own_dlls "$dest"
+
+    echo ""
+    echo "Copying third-party DLLs from MINGW64..."
+    copy_mingw_deps "$dest"
 
     # Copy ISPCTextureCompressor runtime assets if present.
     if [ -f "$FFMPEG_BIN/ispc_texcomp.dll" ]; then
@@ -90,8 +181,10 @@ copy_bundle() {
 report_dest() {
     local dest="$1"
     echo ""
-    echo "✓ Copied to: $dest"
-    ls -lh "$dest"/{ffmpeg.exe,ffplay.exe,ffprobe.exe,*.dll} 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
+    echo "✓ Copied to: $dest ($(ls "$dest"/*.dll 2>/dev/null | wc -l) DLLs)"
+    ls -lh "$dest"/{ffmpeg.exe,ffplay.exe,ffprobe.exe,mpv.exe,mpv.com,*.dll} 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
+    echo ""
+    verify_bundle "$dest" || BUNDLE_INCOMPLETE=1
     echo ""
 }
 
@@ -131,28 +224,11 @@ fi
 echo "You can now use these executables from PowerShell or CMD."
 echo ""
 
-# Ask if user wants to build mpv now
-if [ -d "/c/ff/mpv" ]; then
-    echo "=========================================="
-    echo "Build mpv with updated FFmpeg?"
-    echo "=========================================="
-    read -p "Do you want to build mpv now? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo ""
-        echo "Starting mpv build..."
-        cd /c/ff/mpv
-        if [ -f "./build-mpv.sh" ]; then
-            ./build-mpv.sh
-        else
-            echo "Warning: build-mpv.sh not found in /c/ff/mpv"
-            echo "You can build mpv manually by running:"
-            echo "  cd /c/ff/mpv && meson compile -C build"
-        fi
-    else
-        echo "Skipping mpv build."
-        echo "To build mpv later, run:"
-        echo "  cd /c/ff/mpv && ./build-mpv.sh"
-    fi
+if [ "$BUNDLE_INCOMPLETE" -ne 0 ]; then
+    echo ""
+    echo "✗ At least one destination is still missing DLLs (listed above)."
+    echo "  Those executables will bind to whatever the PATH provides, which"
+    echo "  is how a stale libx265.dll breaks them after an x265 version bump."
+    exit 1
 fi
 
