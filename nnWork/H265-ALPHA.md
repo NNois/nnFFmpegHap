@@ -3,10 +3,12 @@
 Support de l'alpha HEVC via un **x265 buildé maison** (`ENABLE_ALPHA=ON`, multilib
 8+10+12 bits), car le paquet MSYS2 `x265` n'a ni l'alpha ni le multilib.
 
-> ✅ **État (2026-09-03) : décodage OK, encodage OK.**
-> Le décodage multi-couche est arrivé en amont dans FFmpeg — il fonctionne
-> nativement sur cette build 8.1.2, sans patch. L'encodage exige un x265
-> **multilib**, sinon l'alpha 8 bits est silencieusement corrompu (voir plus bas).
+> ✅ **État (2026-09-04) : décodage OK, encodage OK.**
+> Le décodage multi-couche est arrivé en amont dans FFmpeg et fonctionne
+> nativement sur cette build 8.1.2 pour les flux conformes. Les fichiers
+> **Apple/VideoToolbox** exigent en plus un patch local, absent de toute 8.1.x
+> (voir *Fichiers Apple*). L'encodage exige un x265 **multilib**, sinon l'alpha
+> 8 bits est silencieusement corrompu (voir *Pourquoi le multilib*).
 
 Les notes de [README_HEVC-Alpha.md](README_HEVC-Alpha.md) décrivent l'état de
 janvier 2026 et une roadmap d'implémentation du décodage : **obsolètes**,
@@ -26,6 +28,18 @@ gardées pour l'historique. Le décodeur amont fait déjà le travail.
 
 Source x265 vendorisée dans `thirdparty/x265` (4.2). Pour changer de version :
 `X265_VERSION=4.3 ./build-msys-prepare-x265-with-alpha.sh` (télécharge si absente).
+
+> 📌 **Où trouver les versions à jour** :
+> <https://github.com/Multicorewareinc/x265/releases>
+>
+> x265 a migré sur GitHub. Le Bitbucket historique
+> (`bitbucket.org/multicoreware/x265_git`) **s'arrête à la 4.2** et n'est plus
+> alimenté — ne pas s'y fier pour juger de la dernière version. Le script
+> télécharge l'asset `x265_<version>.tar.gz` de la release GitHub, qui a la
+> même arborescence que les anciens tarballs Bitbucket.
+>
+> État des versions : 4.2 = `X265_BUILD 216` (vendorisée ici),
+> **4.3 = `X265_BUILD 217`**, publiée le 31/07/2026.
 
 Côté MSVC : `build-msvc-x265.bat` produit la même chose en statique. Note que
 `build-msvc.sh` **n'active pas** libx265 — cette build est décode-only pour Unity.
@@ -134,6 +148,35 @@ couche 1 directement dans le plan 3 de la frame de base.
 Le décodage matériel (dxva2/d3d11va/vulkan) porte sur la couche de base ; le
 chemin alpha testé est logiciel.
 
+### Fichiers Apple / VideoToolbox — patch requis
+
+Apple est de très loin le premier producteur de HEVC-alpha (iPhone, Final Cut,
+Motion, exports macOS), mais ses premières versions génèrent des extensions VPS
+non conformes. Le 8.1.2 d'origine échoue à les parser, **jette la couche alpha**
+et se contente d'un avertissement :
+
+```
+[hevc] Ignoring unsupported VPS extension
+pixfmt:yuv420p              <-- l'alpha a disparu, la vidéo se lit normalement
+```
+
+Le correctif amont existe en **FFmpeg 9.0** mais **n'est pas rétroporté** dans la
+branche `release/8.1` : aucune 8.1.x ne l'aura jamais. Il est donc appliqué ici
+en local : [0001-hevc-alpha-videotoolbox-workaround.patch](0001-hevc-alpha-videotoolbox-workaround.patch).
+
+Trois modifications dans `libavcodec/hevc/ps.c` :
+- deux `AVERROR_INVALIDDATA` → `AVERROR_PATCHWELCOME` dans `decode_vps_ext()`,
+  pour que l'erreur devienne rattrapable ;
+- dans `ff_hevc_decode_nal_vps()`, un repli qui **conserve** la couche alpha si
+  elle a déjà été analysée, au lieu de forcer `nb_layers = 1`, et pose
+  `poc_lsb_not_present` pour que les IDR de cette couche ne lisent pas
+  `pic_order_cnt_lsb`.
+
+Après patch, le message devient `Broken VPS extension, treating as alpha video`
+et le flux sort en `yuva420p`.
+
+Les fichiers produits par x265 sont conformes et n'ont jamais été concernés.
+
 ---
 
 ## Déploiement : le piège du 4.1 → 4.2
@@ -145,6 +188,11 @@ Le passage à 4.2 change **le nom du DLL et le symbole exporté** :
 | paquet MSYS2 (pacman) | `libx265-215.dll` | `x265_api_get_215` |
 | build maison 4.1 | `libx265.dll` | `x265_api_get_215` |
 | build maison 4.2 | `libx265.dll` | `x265_api_get_216` |
+| build maison 4.3 | `libx265.dll` | `x265_api_get_217` |
+
+Chaque montée de version de x265 incrémente ce symbole, donc **toute mise à jour
+de x265 impose de rebuilder FFmpeg puis de redéployer le bundle**. Un bundle
+déployé avec l'ancien `libx265.dll` casse immédiatement.
 
 Un `avcodec-62.dll` compilé contre la 4.2 exige `x265_api_get_216`. S'il trouve
 un ancien `libx265.dll` — dans le dossier de l'application, ou n'importe où dans

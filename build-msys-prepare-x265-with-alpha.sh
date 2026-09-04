@@ -19,7 +19,9 @@ cd "$SCRIPT_DIR"
 
 X265_VERSION="${X265_VERSION:-4.2}"
 X265_ROOT="${X265_ROOT:-$SCRIPT_DIR/thirdparty/x265}"
-X265_URL="${X265_URL:-https://bitbucket.org/multicoreware/x265_git/downloads/x265_${X265_VERSION}.tar.gz}"
+# x265 moved to GitHub; the Bitbucket repo stopped at 4.2 and is now stale.
+# Releases: https://github.com/Multicorewareinc/x265/releases
+X265_URL="${X265_URL:-https://github.com/Multicorewareinc/x265/releases/download/${X265_VERSION}/x265_${X265_VERSION}.tar.gz}"
 BUILD_ROOT="$X265_ROOT/build_mingw"
 INSTALL_PREFIX="${X265_INSTALL_PREFIX:-${MINGW_PREFIX:-/mingw64}}"
 X265_BIN="$INSTALL_PREFIX/bin/x265"
