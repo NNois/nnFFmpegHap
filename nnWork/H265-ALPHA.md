@@ -173,9 +173,65 @@ Trois modifications dans `libavcodec/hevc/ps.c` :
   `pic_order_cnt_lsb`.
 
 Après patch, le message devient `Broken VPS extension, treating as alpha video`
-et le flux sort en `yuva420p`.
+et le flux sort en `yuva420p`. Validé sur un `.mov` VideoToolbox de 2021
+(1280x720, hvc1) : plan alpha `min=0 max=255`, 18,6 % de pixels transparents et
+60,8 % d'opaques — un vrai cache, pas un plan constant.
+
+⚠️ `ffprobe` continue d'annoncer `yuv420p` sur ces fichiers : c'est normal, il
+décrit la couche de base (voir plus haut). Le patch se vérifie sur le message
+et sur `pixfmt:` en décodage, pas sur la ligne `Stream`.
 
 Les fichiers produits par x265 sont conformes et n'ont jamais été concernés.
+
+### Côté mpv — second patch, indépendant du précédent
+
+Patcher FFmpeg ne suffit pas : mpv continuait d'afficher `A=none`. La cause
+n'est pas dans le décodeur mais dans le **choix du format de sortie**.
+
+`avcodec_default_get_format()` retourne le **dernier** format de la liste
+(`libavcodec/decode.c`), par convention le format logiciel « simple ». Or
+`hevcdec` propose `[hwaccels..., yuva420p, yuv420p]` : le dernier est donc celui
+*sans* alpha. Et `setup_multilayer()` n'active la couche alpha que si le format
+retenu porte `AV_PIX_FMT_FLAG_ALPHA` — l'alpha est donc abandonné avant même
+d'être décodé.
+
+| | choix du format |
+|---|---|
+| CLI ffmpeg (`fftools/ffmpeg_dec.c`) | **premier** non-hwaccel → `yuva420p` ✅ |
+| `avcodec_default_get_format` | **dernier** → `yuv420p` ❌ |
+
+Le CLI y échappe parce qu'il installe son propre `get_format()`. mpv n'en avait
+aucun en décodage logiciel — il n'en pose un que pour le décodage matériel.
+D'où l'écart sur le même fichier.
+
+Correctif : [mpv-0001-vd_lavc-prefer-alpha-pixfmt.patch](mpv-0001-vd_lavc-prefer-alpha-pixfmt.patch),
+à appliquer dans **`C:\ff\mpv`** (pas dans FFmpeg). Il ajoute un `get_format()`
+logiciel qui privilégie un format à alpha quand le décodeur en propose un, et
+retombe sur le comportement par défaut sinon.
+
+Rien de tout ceci n'existe en amont chez mpv, et ce n'est pas propre au HEVC :
+tout codec proposant une variante à alpha est concerné. C'est d'ailleurs pour
+une raison voisine que VP8/VP9 avait dû être traité, mais côté FFmpeg
+(cf. [0001-vp8-vp9-alpha-support.patch](0001-vp8-vp9-alpha-support.patch)).
+
+### Côté adConvert (`C:\AD\nnTools\adConvert_app.py`)
+
+Deux correctifs, hors de ce dépôt :
+
+- **Extension `.mp4` → `.mov`** pour le preset `libx265`. HEVC-alpha est une
+  convention Apple/QuickTime distribuée en `.mov` ; l'alpha survit techniquement
+  en `.mp4`, mais QuickTime et Safari attendent `.mov`.
+- **Suppression du bloc qui ajoutait `-x265-params alpha=1`.** FFmpeg négocie
+  l'alpha tout seul depuis le pixel format (« ignore forced alpha option. The
+  pixel format is all we need. » dans `libavcodec/libx265.c`) — cette option
+  était donc redondante quand un plan alpha était présent, et une **panne pure**
+  sinon : la détection faisait `"a" in pix_fmt`, vraie aussi pour `"gray"`, donc
+  `libx265` refusait `alpha=1` avec `EINVAL` et **toute source en niveaux de
+  gris échouait à s'encoder en H.265**. Le bloc est retiré, `-tag:v hvc1` reste.
+
+Validé : encodage `.mov` HEVC-alpha (plan A identique à la source, relu par
+mpv patché en `yuva420p`/`A=straight`) et encodage H.265 d'une source grise
+(échouait avant, passe maintenant).
 
 ---
 

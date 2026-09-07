@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NNois <noel.froger@gmail.com>
+Date: Fri, 4 Sep 2026 00:00:00 +0100
+Subject: [PATCH] vd_lavc: prefer an alpha-carrying pixfmt in software decoding
+
+Applies to the mpv tree (C:\ff\mpv), NOT to FFmpeg.
+
+avcodec_default_get_format() returns the *last* entry of the format list,
+which by convention is the plain software format. A decoder that can also
+output an alpha-carrying variant lists it *before* that plain format, so
+the default choice silently drops the alpha plane.
+
+This is exactly what happens with HEVC carrying an auxiliary alpha layer:
+hevcdec offers [hwaccels..., yuva420p, yuv420p], and selecting yuv420p
+makes setup_multilayer() skip the alpha layer altogether, because it only
+enables it when the chosen pixel format has AV_PIX_FMT_FLAG_ALPHA.
+
+The ffmpeg CLI does not hit this because fftools/ffmpeg_dec.c installs its
+own get_format() which stops at the *first* non-hwaccel entry. mpv had no
+get_format at all in software mode, hence the difference: ffmpeg produced
+yuva420p while mpv produced yuv420p / A=none on the same file.
+
+Install a software get_format() that prefers an alpha-carrying format when
+the decoder offers one and mpv can represent it, and defers to
+avcodec_default_get_format() in every other case.
+
+diff --git a/video/decode/vd_lavc.c b/video/decode/vd_lavc.c
+index 399e1d51fc..3e2b6ce504 100644
+--- a/video/decode/vd_lavc.c
++++ b/video/decode/vd_lavc.c
+@@ -62,6 +62,8 @@ static void uninit_avctx(struct mp_filter *vd);
+ static int get_buffer2_direct(AVCodecContext *avctx, AVFrame *pic, int flags);
+ static enum AVPixelFormat get_format_hwdec(struct AVCodecContext *avctx,
+                                            const enum AVPixelFormat *pix_fmt);
++static enum AVPixelFormat get_format_sw(struct AVCodecContext *avctx,
++                                        const enum AVPixelFormat *pix_fmt);
+ static int hwdec_opt_help(struct mp_log *log, const m_option_t *opt,
+                           struct bstr name);
+ 
+@@ -788,6 +790,9 @@ static void init_avctx(struct mp_filter *vd)
+         if (bstr_endswith0(hwdec_name, "vulkan") || bstr_endswith0(hwdec_name, "vulkan-copy"))
+             threads = 1;
+ #endif
++    } else {
++        avctx->opaque = vd;
++        avctx->get_format = get_format_sw;
+     }
+ 
+     mp_set_avcodec_threads(vd->log, avctx, threads);
+@@ -1034,6 +1039,40 @@ static enum AVPixelFormat get_format_hwdec(struct AVCodecContext *avctx,
+     return select;
+ }
+ 
++// Software decoding format selection.
++//
++// avcodec_default_get_format() returns the *last* entry of the list, which by
++// convention is the plain software format. A decoder that can additionally
++// output an alpha-carrying variant of that format lists it *before* the plain
++// one, so the default choice silently drops the alpha plane. This is what
++// happens with HEVC carrying an auxiliary alpha layer: the decoder offers
++// yuva420p then yuv420p, and picking yuv420p makes hevcdec skip the alpha
++// layer entirely (setup_multilayer() only enables it when the selected pixel
++// format has AV_PIX_FMT_FLAG_ALPHA).
++//
++// Prefer an alpha-carrying format when the decoder offers one and mpv can
++// represent it; fall back to the default behaviour otherwise.
++static enum AVPixelFormat get_format_sw(struct AVCodecContext *avctx,
++                                        const enum AVPixelFormat *fmt)
++{
++    struct mp_filter *vd = avctx->opaque;
++
++    for (int i = 0; fmt[i] != AV_PIX_FMT_NONE; i++) {
++        const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(fmt[i]);
++        if (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL))
++            continue;
++        if (!(desc->flags & AV_PIX_FMT_FLAG_ALPHA))
++            continue;
++        if (pixfmt2imgfmt(fmt[i]) == IMGFMT_NONE)
++            continue;
++        MP_VERBOSE(vd, "Requesting alpha pixfmt '%s' from decoder.\n",
++                   av_get_pix_fmt_name(fmt[i]));
++        return fmt[i];
++    }
++
++    return avcodec_default_get_format(avctx, fmt);
++}
++
+ static int get_buffer2_direct(AVCodecContext *avctx, AVFrame *pic, int flags)
+ {
+     struct mp_filter *vd = avctx->opaque;
+-- 
+2.51.0
