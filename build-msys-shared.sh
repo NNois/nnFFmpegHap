@@ -1,6 +1,6 @@
 #!/bin/bash
 # Rebuild FFmpeg with shared DLLs (required for mpv to use custom codecs)
-# FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2
+# FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026
 # This produces DLLs that must be bundled alongside the executables
 
 set -e
@@ -111,10 +111,33 @@ else
 fi
 
 echo "=========================================="
-echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
+echo "FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
 echo "Rebuilding with SHARED DLLs (mpv-compatible)"
 echo "=========================================="
 echo ""
+
+# NVENC needs nv-codec-headers, not the CUDA toolkit. Fail BEFORE cleaning
+# the previous build if the dependency is unavailable.
+if ! pkg-config --exists 'ffnvcodec >= 12.1.14.0'; then
+    echo "ERROR: NVENC headers missing or too old. In MSYS2 MINGW64 run:"
+    echo "  pacman -S --needed mingw-w64-x86_64-ffnvcodec-headers"
+    exit 1
+fi
+echo "NVENC headers: $(pkg-config --modversion ffnvcodec)"
+
+# drawtext needs freetype2 AND harfbuzz (hard deps in configure); fribidi and
+# fontconfig are optional but we always ship them. Checked before 'make clean'
+# so a missing package does not destroy the previous build.
+for pair in "freetype2:freetype" "harfbuzz:harfbuzz" "fribidi:fribidi" "fontconfig:fontconfig"; do
+    pc="${pair%%:*}"
+    pkg="${pair##*:}"
+    if ! pkg-config --exists "$pc"; then
+        echo "ERROR: $pc missing (needed by the drawtext filter). In MSYS2 MINGW64 run:"
+        echo "  pacman -S --needed mingw-w64-x86_64-$pkg"
+        exit 1
+    fi
+done
+echo "drawtext deps: freetype $(pkg-config --modversion freetype2), harfbuzz $(pkg-config --modversion harfbuzz), fribidi $(pkg-config --modversion fribidi), fontconfig $(pkg-config --modversion fontconfig)"
 
 echo "Step 1: Cleaning previous build..."
 make clean 2>/dev/null || true
@@ -132,6 +155,7 @@ echo "  - HAP: --enable-libsnappy + basis_universal (BC7/BC6H static link)"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
 echo "  - libplacebo (SR shaders): ${PLACEBO_ENABLE:-disabled (pacman -S mingw-w64-x86_64-libplacebo)}"
 echo "  - RTX VSR (sr_rtx): ${RTXVSR_ENABLE:-disabled (run ./build-msys-prepare-rtxvideosdk.sh)}"
+echo "  - Text: --enable-libfreetype --enable-libharfbuzz --enable-libfribidi --enable-libfontconfig (drawtext)"
 echo "  - Network: --enable-libsrt --enable-openssl"
 echo "  - NDI: ${NDISDK_ENABLE:-disabled (run ./build-msys-prepare-ndisdk.sh)}"
 echo "  - DeckLink: ${DECKLINK_ENABLE:-disabled (run ./build-msys-prepare-decklinksdk.sh)}"
@@ -199,12 +223,19 @@ echo ""
     --enable-libmp3lame \
     --enable-libfdk-aac \
     --enable-libzimg \
+    --enable-libfreetype \
+    --enable-libharfbuzz \
+    --enable-libfribidi \
+    --enable-libfontconfig \
     --enable-libsrt \
     --enable-openssl \
     --enable-vulkan \
     --enable-libshaderc \
     --enable-d3d11va \
     --enable-d3d12va \
+    --enable-ffnvcodec \
+    --enable-nvenc \
+    --enable-encoder=h264_nvenc \
     $NDISDK_ENABLE \
     $DECKLINK_ENABLE \
     $PLACEBO_ENABLE \
@@ -215,10 +246,21 @@ echo ""
     --extra-libs="$BASISU_LIBS $BINK2SDK_LIBS"
 
 echo ""
-echo "Step 3: Verifying HAP and Bink2 are enabled..."
+echo "Step 3: Verifying NVENC, HAP, Bink2 and drawtext are enabled..."
+for feature in FFNVCODEC NVENC H264_NVENC_ENCODER; do
+    if ! grep -q "^CONFIG_$feature=yes$" ffbuild/config.mak; then
+        echo "ERROR: CONFIG_$feature is disabled; refusing a build without NVENC."
+        exit 1
+    fi
+done
 grep -q "CONFIG_HAP_ENCODER=yes" ffbuild/config.mak && echo "✓ HAP encoder enabled" || echo "✗ HAP encoder NOT enabled"
 grep -q "CONFIG_HAP_DECODER=yes" ffbuild/config.mak && echo "✓ HAP decoder enabled" || echo "✗ HAP decoder NOT enabled"
 grep -q "CONFIG_BINK2_DECODER=yes" ffbuild/config.mak && echo "✓ Bink2 decoder enabled" || echo "✗ Bink2 decoder NOT enabled"
+if ! grep -q "^CONFIG_DRAWTEXT_FILTER=yes$" ffbuild/config.mak; then
+    echo "ERROR: CONFIG_DRAWTEXT_FILTER is disabled; refusing a build without drawtext."
+    exit 1
+fi
+echo "✓ drawtext filter enabled"
 
 echo ""
 echo "Step 4: Building FFmpeg..."
@@ -238,7 +280,7 @@ echo "=========================================="
 echo "✓ Build Complete!"
 echo "=========================================="
 echo ""
-echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
+echo "FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
 echo "Build type: SHARED DLLs (bundle required)"
 echo "Build features:"
 echo "  - Hap R support (FourCC: 'Hap7') - BC7 via basis_universal"
@@ -350,7 +392,7 @@ fi
 
 echo ""
 echo "=========================================="
-echo "♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
+echo "FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
 echo "Portable Build Complete"
 echo "=========================================="
 echo ""

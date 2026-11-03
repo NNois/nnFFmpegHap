@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Bootstrap MSYS2 itself on a fresh Windows PC, so the repo is ready for
@@ -30,7 +30,7 @@ function Test-Admin {
 }
 
 Write-Host "=========================================="
-Write-Host "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
+Write-Host "FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
 Write-Host "MSYS2 Bootstrap"
 Write-Host "=========================================="
 Write-Host ""

@@ -1395,7 +1395,7 @@ static int video_open(VideoState *is)
     h = screen_height ? screen_height : default_height;
 
     if (!window_title)
-        window_title = input_filename;
+        window_title = av_asprintf("%s - " FFTOOLS_FULL_TITLE, input_filename);
     SDL_SetWindowTitle(window, window_title);
 
     SDL_SetWindowSize(window, w, h);
@@ -2972,7 +2972,7 @@ static int read_thread(void *arg)
     is->max_frame_duration = (ic->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
     if (!window_title && (t = av_dict_get(ic->metadata, "title", NULL, 0)))
-        window_title = av_asprintf("%s - %s", t->value, input_filename);
+        window_title = av_asprintf("%s - %s - " FFTOOLS_FULL_TITLE, t->value, input_filename);
 
     /* if seeking requested, we execute it */
     if (start_time != AV_NOPTS_VALUE) {
@@ -3922,7 +3922,7 @@ int main(int argc, char **argv)
                 enable_vulkan = 0;
             }
         }
-        window = SDL_CreateWindow(program_name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, default_width, default_height, flags);
+        window = SDL_CreateWindow(FFTOOLS_FULL_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, default_width, default_height, flags);
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
         if (!window) {
             av_log(NULL, AV_LOG_FATAL, "Failed to create window: %s", SDL_GetError());

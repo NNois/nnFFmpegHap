@@ -98,7 +98,9 @@ static int hdr_decode_frame(AVCodecContext *avctx, AVFrame *p,
 
     bytestream2_init(&gb, avpkt->data, avpkt->size);
     hdr_get_line(&gb, line, sizeof(line));
-    if (memcmp("#?RADIANCE\n", line, 11))
+    /* Both Radiance signatures are standard ("#?RGBE" is written by several
+     * tools); a repeated signature line is skipped by the header loop. */
+    if (memcmp("#?RADIANCE\n", line, 11) && memcmp("#?RGBE\n", line, 7))
         return AVERROR_INVALIDDATA;
 
     do {

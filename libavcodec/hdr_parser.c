@@ -48,7 +48,12 @@ static int hdr_parse(AVCodecParserContext *s, AVCodecContext *avctx,
     } else {
         for (; i < buf_size; i++) {
             state = (state << 8) | buf[i];
-            if (state == AV_RB64("ADIANCE\n") && (i > 10 || ipc->pc.index > 10)) {
+            /* A frame starts with the signature; some writers repeat it
+             * (Poly Haven: "#?RADIANCE\n#?RADIANCE\n"). A signature that
+             * ends at offset 21 of the frame is that repeat, not a new frame:
+             * splitting there gave the decoder an empty 11-byte picture. */
+            if (state == AV_RB64("ADIANCE\n") && (i > 10 || ipc->pc.index > 10) &&
+                ipc->pc.index + i != 21) {
                 next = i - 10;
                 break;
             }

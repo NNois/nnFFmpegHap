@@ -1,12 +1,12 @@
 #!/bin/bash
 # Install all MSYS2 dependencies for FFmpeg compilation with HAP support
-# FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2
+# FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026
 # Run this in MSYS2 MINGW64 terminal
 
 set -e
 
 echo "=========================================="
-echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
+echo "FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
 echo "Build Dependencies Installer"
 echo "=========================================="
 echo ""
@@ -72,7 +72,8 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-libvorbis \
     mingw-w64-x86_64-opus \
     mingw-w64-x86_64-lame \
-    mingw-w64-x86_64-fdk-aac
+    mingw-w64-x86_64-fdk-aac \
+    mingw-w64-x86_64-ffnvcodec-headers
 
 echo ""
 echo "Step 4: Installing additional libraries..."
@@ -83,7 +84,11 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-zlib \
     mingw-w64-x86_64-bzip2 \
     mingw-w64-x86_64-zimg \
-    mingw-w64-x86_64-srt
+    mingw-w64-x86_64-srt \
+    mingw-w64-x86_64-freetype \
+    mingw-w64-x86_64-harfbuzz \
+    mingw-w64-x86_64-fribidi \
+    mingw-w64-x86_64-fontconfig
 
 echo ""
 echo "Step 5: Installing Vulkan libraries..."
@@ -129,6 +134,8 @@ echo "    - SDL2 (video playback for ffplay)"
 echo "    - zlib & bzip2 (compression)"
 echo "    - zimg (zscale filter for high-quality scaling)"
 echo "    - libsrt (Secure Reliable Transport protocol)"
+echo "    - freetype + harfbuzz (drawtext filter: both required) ⭐"
+echo "    - fribidi + fontconfig (drawtext: bidi text + font lookup by name)"
 echo ""
 echo "  Vulkan Libraries:"
 echo "    - Vulkan headers & loader (GPU acceleration)"

@@ -42,6 +42,7 @@
 #include "libavutil/intfloat.h"
 #include "libavutil/mem.h"
 #include "libavutil/opt.h"
+#include "libavutil/pixdesc.h"
 
 #include "avcodec.h"
 #include "bytestream.h"
@@ -69,8 +70,18 @@ static int hap_get_supported_config(const AVCodecContext *avctx,
                                     int *out_num)
 {
     if (config == AV_CODEC_CONFIG_PIX_FORMAT) {
+        /* Hap H (BC6H unsigned float) : only formats that carry real HDR.
+         * Planar float first, so EXR (gbrp(a)f16) and Radiance HDR
+         * (gbrpf32) are taken as decoded, with no swscale step : the
+         * legacy swscale float/half path clamps to [0,1]. RGBA64 is NOT
+         * offered : it is normalized to [0,1], and ffmpeg auto-picked it
+         * from gbrpf32, which silently lost the whole dynamic range. */
         static const enum AVPixelFormat pix_fmts_haph[] = {
-            AV_PIX_FMT_RGBF16, AV_PIX_FMT_RGBA64LE, AV_PIX_FMT_RGBA64BE,
+            AV_PIX_FMT_GBRPF32LE, AV_PIX_FMT_GBRPF32BE,
+            AV_PIX_FMT_GBRAPF32LE, AV_PIX_FMT_GBRAPF32BE,
+            AV_PIX_FMT_GBRPF16LE, AV_PIX_FMT_GBRPF16BE,
+            AV_PIX_FMT_GBRAPF16LE, AV_PIX_FMT_GBRAPF16BE,
+            AV_PIX_FMT_RGBF16LE, AV_PIX_FMT_RGBF16BE,
             AV_PIX_FMT_NONE
         };
         static const enum AVPixelFormat pix_fmts_other[] = {
@@ -109,7 +120,63 @@ static uint16_t hap_bc6h_float_to_half(float v)
     return float2half(av_float2int(v), &f2h_tables);
 }
 
-static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
+/* BC6H is UNSIGNED float : negative, NaN and infinite values have no
+ * encoding. Clamp them to [0, 65504] (the largest finite half). */
+static uint16_t hap_bc6h_sanitize_half(uint16_t h)
+{
+    if (h & 0x8000)
+        return 0;                       /* negative (or -0, -NaN, -inf) */
+    if ((h & 0x7C00) == 0x7C00)
+        return (h & 0x03FF) ? 0 : 0x7BFF; /* NaN -> 0, +inf -> 65504 */
+    return h;
+}
+
+static uint16_t hap_bc6h_float_to_half_ufloat(float v)
+{
+    if (!(v > 0.0f))
+        return 0;                       /* negative, zero or NaN */
+    if (v > 65504.0f)
+        return 0x7BFF;
+    return hap_bc6h_float_to_half(v);
+}
+
+/* Planar float (GBR / GBRA, 32 or 16 bit, either endianness) straight
+ * to the interleaved RGBA half buffer the BC6H encoder reads. Plane
+ * order in FFmpeg's planar RGB is G, B, R (A). Alpha is ignored : BC6H
+ * has none. */
+static int hap_bc6h_prepare_planar(HapContext *ctx, const AVFrame *frame,
+                                   uint16_t *dst)
+{
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(frame->format);
+    const int is_be  = !!(desc->flags & AV_PIX_FMT_FLAG_BE);
+    const int is_f16 = desc->comp[0].depth == 16;
+    const int width = frame->width, height = frame->height;
+    static const int plane_of_channel[3] = { 2, 0, 1 }; /* R, G, B */
+    int x, y, c;
+
+    for (y = 0; y < height; y++) {
+        for (c = 0; c < 3; c++) {
+            const uint8_t *row = frame->data[plane_of_channel[c]] +
+                                 y * frame->linesize[plane_of_channel[c]];
+            uint16_t *out = dst + (size_t)y * width * 4 + c;
+            if (is_f16) {
+                for (x = 0; x < width; x++)
+                    out[(size_t)x * 4] = hap_bc6h_sanitize_half(
+                        is_be ? AV_RB16(row + x * 2) : AV_RL16(row + x * 2));
+            } else {
+                for (x = 0; x < width; x++)
+                    out[(size_t)x * 4] = hap_bc6h_float_to_half_ufloat(
+                        av_int2float(is_be ? AV_RB32(row + x * 4)
+                                           : AV_RL32(row + x * 4)));
+            }
+        }
+        for (x = 0; x < width; x++)
+            dst[((size_t)y * width + x) * 4 + 3] = 0x3C00; /* alpha 1.0 */
+    }
+    return 0;
+}
+
+static int hap_bc6h_prepare_half(HapContext *ctx, const AVFrame *frame)
 {
     const int width = frame->width;
     const int height = frame->height;
@@ -127,6 +194,14 @@ static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
 
     dst = (uint16_t *)ctx->bc6h_rgba_u16;
 
+    switch (frame->format) {
+    case AV_PIX_FMT_GBRPF32LE:  case AV_PIX_FMT_GBRPF32BE:
+    case AV_PIX_FMT_GBRAPF32LE: case AV_PIX_FMT_GBRAPF32BE:
+    case AV_PIX_FMT_GBRPF16LE:  case AV_PIX_FMT_GBRPF16BE:
+    case AV_PIX_FMT_GBRAPF16LE: case AV_PIX_FMT_GBRAPF16BE:
+        return hap_bc6h_prepare_planar(ctx, frame, dst);
+    }
+
     if (frame->format == AV_PIX_FMT_RGBF16LE ||
         frame->format == AV_PIX_FMT_RGBF16) {
         const uint16_t alpha = 0x3C00;
@@ -135,9 +210,9 @@ static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
             for (x = 0; x < width; x++) {
                 const uint8_t *src = row + x * 6;
                 const size_t idx = ((size_t)y * width + x) * 4;
-                dst[idx + 0] = AV_RL16(src);
-                dst[idx + 1] = AV_RL16(src + 2);
-                dst[idx + 2] = AV_RL16(src + 4);
+                dst[idx + 0] = hap_bc6h_sanitize_half(AV_RL16(src));
+                dst[idx + 1] = hap_bc6h_sanitize_half(AV_RL16(src + 2));
+                dst[idx + 2] = hap_bc6h_sanitize_half(AV_RL16(src + 4));
                 dst[idx + 3] = alpha;
             }
         }
@@ -148,46 +223,10 @@ static int hap_bc6h_prepare_rgba64(HapContext *ctx, const AVFrame *frame)
             for (x = 0; x < width; x++) {
                 const uint8_t *src = row + x * 6;
                 const size_t idx = ((size_t)y * width + x) * 4;
-                dst[idx + 0] = AV_RB16(src);
-                dst[idx + 1] = AV_RB16(src + 2);
-                dst[idx + 2] = AV_RB16(src + 4);
+                dst[idx + 0] = hap_bc6h_sanitize_half(AV_RB16(src));
+                dst[idx + 1] = hap_bc6h_sanitize_half(AV_RB16(src + 2));
+                dst[idx + 2] = hap_bc6h_sanitize_half(AV_RB16(src + 4));
                 dst[idx + 3] = alpha;
-            }
-        }
-    } else if (frame->format == AV_PIX_FMT_RGBA64LE) {
-        const float scale = 1.0f / 65535.0f;
-        for (y = 0; y < height; y++) {
-            const uint8_t *row = frame->data[0] + y * frame->linesize[0];
-            for (x = 0; x < width; x++) {
-                const uint8_t *src = row + x * 8;
-                const size_t idx = ((size_t)y * width + x) * 4;
-                uint16_t r = AV_RL16(src);
-                uint16_t g = AV_RL16(src + 2);
-                uint16_t b = AV_RL16(src + 4);
-                uint16_t a = AV_RL16(src + 6);
-
-                dst[idx + 0] = hap_bc6h_float_to_half(r * scale);
-                dst[idx + 1] = hap_bc6h_float_to_half(g * scale);
-                dst[idx + 2] = hap_bc6h_float_to_half(b * scale);
-                dst[idx + 3] = hap_bc6h_float_to_half(a * scale);
-            }
-        }
-    } else if (frame->format == AV_PIX_FMT_RGBA64BE) {
-        const float scale = 1.0f / 65535.0f;
-        for (y = 0; y < height; y++) {
-            const uint8_t *row = frame->data[0] + y * frame->linesize[0];
-            for (x = 0; x < width; x++) {
-                const uint8_t *src = row + x * 8;
-                const size_t idx = ((size_t)y * width + x) * 4;
-                uint16_t r = AV_RB16(src);
-                uint16_t g = AV_RB16(src + 2);
-                uint16_t b = AV_RB16(src + 4);
-                uint16_t a = AV_RB16(src + 6);
-
-                dst[idx + 0] = hap_bc6h_float_to_half(r * scale);
-                dst[idx + 1] = hap_bc6h_float_to_half(g * scale);
-                dst[idx + 2] = hap_bc6h_float_to_half(b * scale);
-                dst[idx + 3] = hap_bc6h_float_to_half(a * scale);
             }
         }
     } else {
@@ -248,7 +287,7 @@ static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length,
         ctx->enc[0].tex_data.out = out;
         if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
             /* BC6H: use the pre-converted RGBA half-float buffer */
-            int ret = hap_bc6h_prepare_rgba64(ctx, f);
+            int ret = hap_bc6h_prepare_half(ctx, f);
             if (ret < 0)
                 return ret;
             ctx->enc[0].frame_data.in = ctx->bc6h_rgba_u16;
@@ -593,13 +632,20 @@ static av_cold int hap_init(AVCodecContext *avctx)
     }
 
     if (ctx->opt_tex_fmt == HAP_FMT_BPTC_UF) {
-        if (avctx->pix_fmt != AV_PIX_FMT_RGBF16 &&
-            avctx->pix_fmt != AV_PIX_FMT_RGBF16LE &&
-            avctx->pix_fmt != AV_PIX_FMT_RGBF16BE &&
-            avctx->pix_fmt != AV_PIX_FMT_RGBA64LE &&
-            avctx->pix_fmt != AV_PIX_FMT_RGBA64BE) {
+        switch (avctx->pix_fmt) {
+        case AV_PIX_FMT_GBRPF32LE:  case AV_PIX_FMT_GBRPF32BE:
+        case AV_PIX_FMT_GBRAPF32LE: case AV_PIX_FMT_GBRAPF32BE:
+        case AV_PIX_FMT_GBRPF16LE:  case AV_PIX_FMT_GBRPF16BE:
+        case AV_PIX_FMT_GBRAPF16LE: case AV_PIX_FMT_GBRAPF16BE:
+        case AV_PIX_FMT_RGBF16LE:   case AV_PIX_FMT_RGBF16BE:
+            break;
+        default:
+            /* RGBA64 is refused on purpose : normalized to [0,1], it
+             * cannot carry HDR (see pix_fmts_haph). */
             av_log(avctx, AV_LOG_ERROR,
-                   "HapH requires RGBF16 or RGBA64 input.\n");
+                   "HapH requires float input (gbrpf32, gbrapf32, gbrpf16, "
+                   "gbrapf16 or rgbf16), got %s.\n",
+                   av_get_pix_fmt_name(avctx->pix_fmt));
             return AVERROR(EINVAL);
         }
     }
@@ -779,8 +825,11 @@ const FFCodec ff_hap_encoder = {
     .init           = hap_init,
     FF_CODEC_ENCODE_CB(hap_encode),
     .close          = hap_close,
-    CODEC_PIXFMTS(AV_PIX_FMT_RGBA, AV_PIX_FMT_GRAY8, AV_PIX_FMT_RGBF16,
-                  AV_PIX_FMT_RGBA64LE, AV_PIX_FMT_RGBA64BE),
+    /* Union of hap_get_supported_config's lists (what -h encoder=hap shows). */
+    CODEC_PIXFMTS(AV_PIX_FMT_RGBA, AV_PIX_FMT_GRAY8,
+                  AV_PIX_FMT_GBRPF32LE, AV_PIX_FMT_GBRAPF32LE,
+                  AV_PIX_FMT_GBRPF16LE, AV_PIX_FMT_GBRAPF16LE,
+                  AV_PIX_FMT_RGBF16),
     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
     .get_supported_config = hap_get_supported_config,
 };

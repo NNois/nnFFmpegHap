@@ -25,6 +25,9 @@
 
 #include "cmdutils.h"
 
+#define FFTOOLS_BRANDING "Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
+#define FFTOOLS_FULL_TITLE "FFmpeg 8.1.2 - " FFTOOLS_BRANDING
+
 #if CONFIG_AVDEVICE
 /**
  * Print a listing containing autodetected sinks of the output device.

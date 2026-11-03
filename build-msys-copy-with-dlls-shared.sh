@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copy FFmpeg executables with required DLLs to make them portable
-# FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2
+# FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026
 
 set -e
 
@@ -15,7 +15,7 @@ BUNDLE_INCOMPLETE=0
 # argument, each KNOWN destination is offered with a y/N prompt below.
 DEST_DIR="${1:-}"
 NNTOOLS_DIR="${NNTOOLS_DIR:-/c/AD/nnTools/tools/ffmpeg}"
-FLOCON_DIR="${FLOCON_DIR:-/c/AD/AdFlocon/libs/ffmpeg}"
+FLOCON_DIR="${FLOCON_DIR:-/c/AD/AdFlocon/libs/ffmpeg/win64}"
 
 # mpv ships in the same bundle. It is deliberately copied by this script and
 # not by one of its own: mpv links against the FFmpeg DLLs sitting next to it,
@@ -36,7 +36,7 @@ if [ ! -d "$FFMPEG_BIN" ]; then
 fi
 
 echo "=========================================="
-echo "FFmpeg -  ♥♥ Alternative Development Broadcast Edition ♥♥ - 8.1.2"
+echo "FFmpeg 8.1.2 - Broadcast Edition - Made with ❤️ by Alternative Developpement 2026"
 echo "Copying with DLLs"
 echo "=========================================="
 echo ""
