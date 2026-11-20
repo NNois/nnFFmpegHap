@@ -139,6 +139,17 @@ for pair in "freetype2:freetype" "harfbuzz:harfbuzz" "fribidi:fribidi" "fontconf
 done
 echo "drawtext deps: freetype $(pkg-config --modversion freetype2), harfbuzz $(pkg-config --modversion harfbuzz), fribidi $(pkg-config --modversion fribidi), fontconfig $(pkg-config --modversion fontconfig)"
 
+# WebP ENCODER (libwebp): AdFlocon's web version of an image WITH alpha is a
+# WebP (the only common web image format that carries it). FFmpeg only ships a
+# WebP DECODER natively - without libwebp, every transparent image fails its
+# web version ("Unknown encoder 'libwebp'"). Checked before 'make clean'.
+if ! pkg-config --exists libwebp; then
+    echo "ERROR: libwebp missing (WebP encoder). In MSYS2 MINGW64 run:"
+    echo "  pacman -S --needed mingw-w64-x86_64-libwebp"
+    exit 1
+fi
+echo "WebP: libwebp $(pkg-config --modversion libwebp)"
+
 echo "Step 1: Cleaning previous build..."
 make clean 2>/dev/null || true
 rm -f config.h config.log ffbuild/config.mak 2>/dev/null || true
@@ -150,6 +161,7 @@ echo "Step 2: Configuring build options (SHARED BUILD):"
 echo "  - Core: --enable-gpl --enable-version3 --enable-nonfree --disable-debug"
 echo "  - Link: --enable-shared --disable-static"
 echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libsvtav1 --enable-libdav1d --enable-libzimg"
+echo "  - Image: --enable-libwebp (WebP encoder, web version of transparent images)"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
 echo "  - HAP: --enable-libsnappy + basis_universal (BC7/BC6H static link)"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
@@ -223,6 +235,7 @@ echo ""
     --enable-libmp3lame \
     --enable-libfdk-aac \
     --enable-libzimg \
+    --enable-libwebp \
     --enable-libfreetype \
     --enable-libharfbuzz \
     --enable-libfribidi \
