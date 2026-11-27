@@ -34,6 +34,8 @@
 #include "zstd/zstd.h"
 
 #include <inttypes.h>
+#include <limits.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "libavutil/common.h"
@@ -42,6 +44,7 @@
 #include "libavutil/intreadwrite.h"
 #include "libavutil/mem.h"
 #include "libavutil/opt.h"
+#include "libavutil/rational.h"
 
 #include "avcodec.h"
 #include "bc7dec.h"
@@ -57,12 +60,15 @@ typedef struct KTX2DecContext {
     size_t blocks_size;
 } KTX2DecContext;
 
-static void log_key_values(AVCodecContext *avctx, const uint8_t *data, size_t size,
-                           uint32_t offset, uint32_t length)
+/* THE KEY/VALUE DATA: logged at verbose level; adtv.displayAspect ("5:3", written by the encoder from the sample
+ * aspect ratio) comes back in *display_w / *display_h - a texture scaled to a multiple of 4 is shown at its real
+ * proportions. */
+static void read_key_values(AVCodecContext *avctx, const uint8_t *data, size_t size,
+                            uint32_t offset, uint32_t length, int *display_w, int *display_h)
 {
     const uint8_t *q, *end;
 
-    if (av_log_get_level() < AV_LOG_VERBOSE || !length || offset > size || length > size - offset)
+    if (!length || offset > size || length > size - offset)
         return;
     q   = data + offset;
     end = q + length;
@@ -72,9 +78,20 @@ static void log_key_values(AVCodecContext *avctx, const uint8_t *data, size_t si
         if (entry > (size_t)(end - kv))
             break;
         nul = memchr(kv, 0, entry);
-        if (nul && nul + 1 < kv + entry)
-            av_log(avctx, AV_LOG_VERBOSE, "KTX2 %s = %.*s\n", kv,
-                   (int)(kv + entry - nul - 1), nul + 1);
+        if (nul && nul + 1 < kv + entry) {
+            const int value_len = (int)(kv + entry - nul - 1);
+            char value[32];
+            av_log(avctx, AV_LOG_VERBOSE, "KTX2 %s = %.*s\n", kv, value_len, nul + 1);
+            if (!strcmp((const char *)kv, "adtv.displayAspect") && value_len < (int)sizeof(value)) {
+                int w = 0, h = 0;
+                memcpy(value, nul + 1, value_len);
+                value[value_len] = 0;
+                if (sscanf(value, "%d:%d", &w, &h) == 2 && w > 0 && h > 0) {
+                    *display_w = w;
+                    *display_h = h;
+                }
+            }
+        }
         q = kv + FFALIGN(entry, 4);
     }
 }
@@ -90,7 +107,8 @@ static int ktx2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
     uint64_t offset, length, raw_length;
     const uint8_t *blocks, *entry;
     size_t bw, bh;
-    int level, ret;
+    int level, ret, display_w = 0, display_h = 0;
+    uint32_t width0, height0;
 
     if (size < KTX2_HEADER_SIZE + KTX2_LEVEL_ENTRY_SIZE ||
         memcmp(data, ff_ktx2_identifier, KTX2_IDENTIFIER_SIZE)) {
@@ -122,6 +140,8 @@ static int ktx2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
         return ret;
     if (!levels)
         levels = 1;   /* 0 = "generate the mips at load time": level 0 is still there */
+    width0  = width;
+    height0 = height;
     if (size < KTX2_HEADER_SIZE + (uint64_t)levels * KTX2_LEVEL_ENTRY_SIZE)
         return AVERROR_INVALIDDATA;
 
@@ -148,7 +168,7 @@ static int ktx2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                level, raw_length, bw * bh * KTX2_BC7_BLOCK_BYTES, width, height);
         return AVERROR_INVALIDDATA;
     }
-    log_key_values(avctx, data, size, AV_RL32(data + 56), AV_RL32(data + 60));
+    read_key_values(avctx, data, size, AV_RL32(data + 56), AV_RL32(data + 60), &display_w, &display_h);
     av_log(avctx, AV_LOG_VERBOSE, "KTX2: level %d of %u, %ux%u BC7 %s, %s\n", level, levels, width, height,
            format == KTX2_VK_FORMAT_BC7_SRGB_BLOCK ? "sRGB" : "UNORM",
            scheme == KTX2_SUPERCOMPRESSION_ZSTD ? "zstd" : "raw");
@@ -177,6 +197,10 @@ static int ktx2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
 
     if ((ret = ff_set_dimensions(avctx, width, height)) < 0)
         return ret;
+    /* The pixel aspect that brings the texture back to its display aspect (the same at every level). */
+    if (display_w > 0 && display_h > 0)
+        av_reduce(&avctx->sample_aspect_ratio.num, &avctx->sample_aspect_ratio.den,
+                  (int64_t)display_w * height0, (int64_t)width0 * display_h, INT_MAX);
     /* Blocks are 4 x 4: the frame is allocated at the aligned size, cropped on output. */
     avctx->coded_width     = bw * 4;
     avctx->coded_height    = bh * 4;

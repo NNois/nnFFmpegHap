@@ -35,7 +35,9 @@
  *  - every level Zstandard-compressed (KTX2 supercompressionScheme 2), or
  *    stored raw (option zstd_level=0);
  *  - key/value data: KTXwriter, adtv.mipmaps, adtv.mipSharpen,
- *    adtv.bc7Quality, plus any adtv.* pair given by option kv.
+ *    adtv.bc7Quality, adtv.displayAspect (the exact proportions to lay the
+ *    image out at, from the sample aspect ratio), plus any adtv.* pair
+ *    given by option kv.
  */
 
 #include <math.h>
@@ -438,7 +440,7 @@ static int ktx2_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     Level levels[KTX2_MAX_LEVELS] = { 0 };
     LinearLevel chain = { 0 };
     KeyValue kv[KTX2_MAX_KV];
-    char quality[8], sharpen[8];
+    char quality[8], sharpen[8], display[32];
     const char *writer = "AD-TV FFmpeg " FFMPEG_VERSION " ktx2";
     int level_count = 1, kv_count = 0, has_alpha = 0, ret = 0;
     int (*block)(uint8_t *, ptrdiff_t, const uint8_t *);
@@ -521,6 +523,17 @@ static int ktx2_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     kv[kv_count++] = (KeyValue){ "adtv.mipmaps", level_count > 1 ? "1" : "0" };
     if (level_count > 1)
         kv[kv_count++] = (KeyValue){ "adtv.mipSharpen", sharpen };
+    /* THE DISPLAY ASPECT: a BC texture is scaled to a multiple of 4 (WebGPU), which bends the aspect of a small image
+     * (30 x 18 -> 32 x 20). A scale in front keeps the display aspect in the sample aspect ratio (setsar=1 then scale);
+     * written here exactly ("5:3"), the reader lays the image out at its real proportions. Square pixels: W:H. */
+    {
+        const AVRational sar = avctx->sample_aspect_ratio;
+        int num, den;
+        av_reduce(&num, &den, (int64_t)avctx->width * (sar.num > 0 && sar.den > 0 ? sar.num : 1),
+                  (int64_t)avctx->height * (sar.num > 0 && sar.den > 0 ? sar.den : 1), INT_MAX);
+        snprintf(display, sizeof(display), "%d:%d", num, den);
+        kv[kv_count++] = (KeyValue){ "adtv.displayAspect", display };
+    }
     while ((e = av_dict_iterate(ctx->kv, e)) && kv_count < KTX2_MAX_KV) {
         int known = 0;
         for (int i = 0; i < kv_count; i++)

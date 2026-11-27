@@ -43,7 +43,12 @@ ffmpeg -i normal.png -srgb 0 -frames:v 1 -update 1 normal.ktx2          # carte 
 - **Un niveau dont la taille n'est pas un multiple de 4** est complété en répétant sa dernière ligne et colonne.
 - **L'alpha** : une image qui en a passe par le chemin RGBA du BC7 ; une image opaque se décode avec un alpha de
   **255 exactement** (voir plus bas).
-- **Les clés écrites** : `KTXwriter`, `adtv.bc7Quality`, `adtv.mipmaps`, `adtv.mipSharpen` (avec mip-maps), puis `kv`.
+- **Les clés écrites** : `KTXwriter`, `adtv.bc7Quality`, `adtv.displayAspect`, `adtv.mipmaps`, `adtv.mipSharpen` (avec
+  mip-maps), puis `kv`.
+- **La proportion d'affichage** (`adtv.displayAspect`, « 5:3 ») : la largeur × SAR sur la hauteur, réduite. Une chaîne
+  `setsar=1,scale=ceil(iw/4)*4:ceil(ih/4)*4` (AdFlocon) porte au multiple de 4 que WebGPU exige d'une texture BC, et le
+  SAR garde la proportion de l'image d'avant : un 30 × 18 devient une texture 32 × 20 montrée en 5:3. Le décodeur la
+  remet en SAR (ffplay, mpv : la bonne proportion) ; le moteur d'AdFlocon met l'image en page à cette proportion.
 - **Vitesse** (VS1, 32 cœurs) : 1920 × 1280 avec ses 11 niveaux ≈ 470 ms ; le BC7 tourne en tranches sur les threads.
 
 ## Lire
