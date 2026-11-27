@@ -98,6 +98,13 @@ ffmpeg -i out_hap7.mov -pix_fmt rgba frame_%04d.png
 
 - **Hap R / BC7** : l'encodeur (bc7enc via basis_universal) produit les modes
   1/5/6/7. Le décodeur BC7 de FFmpeg gère ces modes ; modes 0/2/3/4 = TODO.
+- **Hap R, alpha d'un bloc opaque = 255 exactement** (27 novembre 2026) : aux
+  qualités 3 et 4, basis_universal (`cPackBC7FlagPBitOptMode6`) laissait un alpha
+  de 254 sur une partie des blocs opaques — 28,6 % des pixels d'une photo opaque
+  en qualité 3 (le défaut), de petits blocs pas tout à fait pleins dans la clé.
+  `hap_bc7_encode_block` remet les bits de parité alpha de ces blocs à 1
+  (`libavcodec/bc7opaque.h`, partagé avec l'encodeur `ktx2` — voir
+  [KTX2.md](KTX2.md)). Les films déjà encodés ne sont pas réencodés.
 - **Hap Q** : la transformation YCoCg (scaled) a été corrigée dans cette build.
 - **Hap M** = « Hap Q Alpha » (multi-texture : YCoCg DXT5 + BC4 alpha), headers
   chunk conformes à la spec.

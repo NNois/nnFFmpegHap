@@ -688,6 +688,16 @@ static int dds_probe(const AVProbeData *p)
     return 0;
 }
 
+/* KTX2: its 12-byte identifier (AD-TV fork, ktx2 decoder). */
+static int ktx2_probe(const AVProbeData *p)
+{
+    static const uint8_t id[12] = { 0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32, 0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A };
+
+    if (p->buf_size >= 12 && !memcmp(p->buf, id, 12))
+        return AVPROBE_SCORE_MAX - 1;
+    return 0;
+}
+
 static int dpx_probe(const AVProbeData *p)
 {
     const uint8_t *b = p->buf;
@@ -1225,6 +1235,7 @@ IMAGEAUTO_DEMUXER_EXT(jpeg,  MJPEG, JPEG)
 IMAGEAUTO_DEMUXER(jpegxs,    JPEGXS)
 IMAGEAUTO_DEMUXER(jpegls,    JPEGLS)
 IMAGEAUTO_DEMUXER(jpegxl,    JPEGXL)
+IMAGEAUTO_DEMUXER(ktx2,      KTX2)
 IMAGEAUTO_DEMUXER(pam,       PAM)
 IMAGEAUTO_DEMUXER(pbm,       PBM)
 IMAGEAUTO_DEMUXER(pcx,       PCX)

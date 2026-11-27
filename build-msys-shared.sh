@@ -150,6 +150,18 @@ if ! pkg-config --exists libwebp; then
 fi
 echo "WebP: libwebp $(pkg-config --modversion libwebp)"
 
+# KTX2: the ktx2 encoder/decoder of this fork - BC7 pictures with their mip
+# levels, Zstandard-supercompressed (AdFlocon NOTE-80, the broadcast version of
+# an image; readable by ffplay / mpv). Zstandard is the copy basis_universal
+# builds into libbasisu_encoder.a (zstd/zstd.c, BASISU_ZSTD=ON by default):
+# never the system libzstd as well (every ZSTD_* symbol would be defined twice).
+if [ ! -f "$BASISU_ROOT/zstd/zstd.h" ]; then
+    echo "ERROR: $BASISU_ROOT/zstd/zstd.h missing (KTX2 needs the zstd of basis_universal)."
+    echo "  Run ./build-msys-prepare-basis-universal.sh again."
+    exit 1
+fi
+echo "KTX2: zstd $(sed -n 's/^#define ZSTD_VERSION_\(MAJOR\|MINOR\|RELEASE\) *\([0-9]*\).*/\2/p' "$BASISU_ROOT/zstd/zstd.h" | paste -sd.) (basis_universal)"
+
 echo "Step 1: Cleaning previous build..."
 make clean 2>/dev/null || true
 rm -f config.h config.log ffbuild/config.mak 2>/dev/null || true
@@ -164,6 +176,7 @@ echo "  - Video: --enable-libx264 --enable-libx265 --enable-libvpx --enable-liba
 echo "  - Image: --enable-libwebp (WebP encoder, web version of transparent images)"
 echo "  - Audio: --enable-libvorbis --enable-libopus --enable-libmp3lame --enable-libfdk-aac"
 echo "  - HAP: --enable-libsnappy + basis_universal (BC7/BC6H static link)"
+echo "  - KTX2: ktx2 encoder/decoder (BC7 + mip levels + zstd of basis_universal)"
 echo "  - Vulkan: --enable-vulkan --enable-libshaderc"
 echo "  - libplacebo (SR shaders): ${PLACEBO_ENABLE:-disabled (pacman -S mingw-w64-x86_64-libplacebo)}"
 echo "  - RTX VSR (sr_rtx): ${RTXVSR_ENABLE:-disabled (run ./build-msys-prepare-rtxvideosdk.sh)}"
@@ -269,6 +282,13 @@ done
 grep -q "CONFIG_HAP_ENCODER=yes" ffbuild/config.mak && echo "✓ HAP encoder enabled" || echo "✗ HAP encoder NOT enabled"
 grep -q "CONFIG_HAP_DECODER=yes" ffbuild/config.mak && echo "✓ HAP decoder enabled" || echo "✗ HAP decoder NOT enabled"
 grep -q "CONFIG_BINK2_DECODER=yes" ffbuild/config.mak && echo "✓ Bink2 decoder enabled" || echo "✗ Bink2 decoder NOT enabled"
+for feature in KTX2_ENCODER KTX2_DECODER IMAGE_KTX2_PIPE_DEMUXER; do
+    if ! grep -q "^CONFIG_$feature=yes$" ffbuild/config.mak; then
+        echo "ERROR: CONFIG_$feature is disabled; refusing a build without KTX2."
+        exit 1
+    fi
+done
+echo "✓ KTX2 encoder, decoder and pipe demuxer enabled"
 if ! grep -q "^CONFIG_DRAWTEXT_FILTER=yes$" ffbuild/config.mak; then
     echo "ERROR: CONFIG_DRAWTEXT_FILTER is disabled; refusing a build without drawtext."
     exit 1
@@ -302,6 +322,7 @@ echo "  - HapM support (FourCC: 'HapM')"
 echo "  - HapA support (FourCC: 'HapA')"
 echo "  - Fixed YCoCg color transform"
 echo "  - Bink video 2 decoder (binkvideo2)"
+echo "  - KTX2 images (.ktx2): BC7 + mip levels + zstd (ktx2 encoder/decoder)"
 echo "  - ProRes encoder (prores, prores_aw, prores_ks)"
 echo ""
 
@@ -374,6 +395,10 @@ echo "Testing HAP encoder:"
 echo ""
 echo "Testing Bink2 decoder:"
 "$FFMPEG_BIN/ffmpeg" -hide_banner -decoders 2>/dev/null | grep binkvideo2 || echo "Bink2 not found in decoders"
+
+echo ""
+echo "Testing KTX2 encoder/decoder:"
+"$FFMPEG_BIN/ffmpeg" -hide_banner -codecs 2>/dev/null | grep -w ktx2 || echo "KTX2 not found in codecs"
 
 echo ""
 echo "Testing ProRes encoder:"

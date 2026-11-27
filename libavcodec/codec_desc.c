@@ -2016,6 +2016,14 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .long_name = NULL_IF_CONFIG_SMALL("Bink video 2"),
         .props     = AV_CODEC_PROP_LOSSY,
     },
+    {
+        .id        = AV_CODEC_ID_KTX2,
+        .type      = AVMEDIA_TYPE_VIDEO,
+        .name      = "ktx2",
+        .long_name = NULL_IF_CONFIG_SMALL("Khronos KTX2 texture (BC7, mip levels, zstd)"),
+        .props     = AV_CODEC_PROP_INTRA_ONLY | AV_CODEC_PROP_LOSSY,
+        .mime_types= MT("image/ktx2"),
+    },
 
     /* various PCM "codecs" */
     {

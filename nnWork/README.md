@@ -5,6 +5,7 @@
 - [BASIS_UNIVERSAL.md](BASIS_UNIVERSAL.md) — backend BC7/BC6H de Hap R/HDR
 - [H265-ALPHA.md](H265-ALPHA.md) — HEVC alpha (encode OK, decode KO) → détails [README_HEVC-Alpha.md](README_HEVC-Alpha.md)
 - [BINK2.md](BINK2.md) — décodeur Bink Video 2 (SDK RAD)
+- [KTX2.md](KTX2.md) — images `.ktx2` : BC7 + mip-maps (netteté du moteur AdFlocon) + zstd, encodeur et décodeur (ffplay, mpv)
 - [NDI.md](NDI.md) — device NDI (libndi_newtek) entrée/sortie
 - [DECKLINK.md](DECKLINK.md) — cartes Blackmagic (device decklink)
 - [SUPER-RESOLUTION.md](SUPER-RESOLUTION.md) — upscale IA avec alpha : libplacebo + shaders CNN, filtre `sr_rtx` (NVIDIA RTX VSR)

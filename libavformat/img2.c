@@ -47,6 +47,7 @@
     TAG(CRI,             cri      ) \
     TAG(ALIAS_PIX,       pix      ) \
     TAG(DDS,             dds      ) \
+    TAG(KTX2,            ktx2     ) \
     TAG(MPEG1VIDEO,      mpg1-img ) \
     TAG(MPEG2VIDEO,      mpg2-img ) \
     TAG(MPEG4,           mpg4-img ) \

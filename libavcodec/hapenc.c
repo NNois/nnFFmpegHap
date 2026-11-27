@@ -47,6 +47,7 @@
 #include "avcodec.h"
 #include "bytestream.h"
 #include "basisu_wrapper.h"
+#include "bc7opaque.h"
 #include "codec_internal.h"
 #include "encode.h"
 #include "hap.h"
@@ -247,6 +248,19 @@ static const char *hap_bc6h_profile_name(int quality)
     case 1:  return "fast";
     default: return "fastest";
     }
+}
+
+/**
+ * Hap R: a BC7 block whose 16 source pixels are opaque decodes at alpha 255 exactly (bc7opaque.h —
+ * basis_universal left 254 on 28.6 % of the pixels of an opaque photo at bc7_quality 3, the default).
+ */
+static int hap_bc7_encode_block(uint8_t *dst, ptrdiff_t stride, const uint8_t *block)
+{
+    const int ret = basisu_bc7_encode_block(dst, stride, block);
+
+    if (ff_bc7_source_opaque(block, stride))
+        ff_bc7_fix_opaque_alpha(dst);
+    return ret;
 }
 
 static int compress_texture(AVCodecContext *avctx, uint8_t *out, int out_length, const AVFrame *f)
@@ -668,7 +682,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->enc[0].tex_ratio = 16;
         avctx->codec_tag = MKTAG('H', 'a', 'p', '7');
         avctx->bits_per_coded_sample = 32;
-        ctx->enc[0].tex_funct = basisu_bc7_encode_block;
+        ctx->enc[0].tex_funct = hap_bc7_encode_block;
         break;
     }
     case HAP_FMT_BPTC_UF: {
